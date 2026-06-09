@@ -930,3 +930,16 @@ with tab_nat:
             td=df[df["Nation"]==nc].sort_values("Overall_Index",ascending=False).head(5)[["Player","Squad","League","Primary_Pos","Age_Years","Overall_Index","Archetype_V2"]].copy()
             td.insert(0,"Rank",range(1,len(td)+1))
             st.dataframe(td,column_config={"Rank":st.column_config.NumberColumn("Rank",format="#%d",width="small"),"Age_Years":st.column_config.NumberColumn("Age",format="%d yrs",width="small"),"Overall_Index":st.column_config.ProgressColumn("Overall",min_value=0,max_value=100,format="%.1f",width="medium"),"Archetype_V2":st.column_config.TextColumn("Archetype",width="medium")},use_container_width=True,hide_index=True)
+
+
+# ── FOOTER ────────────────────────────────────────────────────────────────
+st.markdown("""
+<div style="margin-top:60px;padding:16px 32px;border-top:1px solid rgba(74,222,128,0.06);text-align:center;">
+    <div style="font-size:0.65rem;color:#2d4a2d;letter-spacing:0.05em;">
+        Built by <a href="https://www.linkedin.com/in/lalith-polikepati" target="_blank" style="color:#3d6b3d;text-decoration:none;font-weight:600;">Lalith Polikepati</a>
+        &nbsp;·&nbsp; MS Business Analytics & AI, UTD
+        &nbsp;·&nbsp; <a href="https://github.com/p-lalith/kickoff26" target="_blank" style="color:#3d6b3d;text-decoration:none;">GitHub</a>
+        &nbsp;·&nbsp; Data: FBref 2024-25
+    </div>
+</div>
+""", unsafe_allow_html=True)
