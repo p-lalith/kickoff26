@@ -23,7 +23,16 @@ setTimeout(function(){n.remove();},4000);})();
 WC_START = datetime(2026,6,11,20,0,0,tzinfo=timezone.utc)
 
 # ── LIVE SCORES (openfootball — free, no key, updates daily) ─────────────
-@st.cache_data(ttl=300)  # refresh every 5 minutes
+API_NAME_MAP = {
+    "Czech Republic": "Czechia",
+    "Bosnia & Herzegovina": "Bosnia-Herzegovina",
+    "USA": "United States",
+    "DR Congo": "Congo DR",
+    "Turkey": "Turkiye",
+    "Curacao": "Curacao",
+}
+
+@st.cache_data(ttl=300)
 def fetch_live_scores():
     try:
         url = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
@@ -39,6 +48,8 @@ def fetch_live_scores():
             ht = score.get("ht")
             goals1 = m.get("goals1", [])
             goals2 = m.get("goals2", [])
+            t1 = API_NAME_MAP.get(t1, t1)
+            t2 = API_NAME_MAP.get(t2, t2)
             key = f"{t1}|{t2}"
             scores[key] = {
                 "ft": ft,         # [g1, g2] or None if not played
@@ -432,38 +443,42 @@ with tab_mi:
             next_match = m
             break
     if next_match:
-        f_t1n = FLAGS.get(NATION_TO_CODE.get(next_match["team1"],""),"⚽")
-        f_t2n = FLAGS.get(NATION_TO_CODE.get(next_match["team2"],""),"⚽")
-        st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(8,32,8,0.9),rgba(3,12,3,0.95));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:16px 24px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
-            <div>
-                <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:4px;">⏱️ Next Match</div>
-                <div style="font-size:1.1rem;font-weight:800;color:#f0fdf4;">{f_t1n} {next_match["team1"]} <span style="color:#4b7c4b;font-size:0.85rem;">vs</span> {next_match["team2"]} {f_t2n}</div>
-                <div style="font-size:0.75rem;color:#86efac;margin-top:3px;">📅 {next_match["date"]} · ⏰ {next_match["time"]} · 📍 {next_match["city"]}</div>
-            </div>
-            <div id="next-match-timer" style="text-align:center;">
-                <div style="font-size:0.65rem;color:#4b7c4b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Starts in</div>
-                <div id="nmt-display" style="font-size:1.4rem;font-weight:900;color:#fbbf24;font-variant-numeric:tabular-nums;">--:--:--</div>
-            </div>
-        </div>
-        <script>
-        (function(){{
-            var scores = {{}};
-            {{}};
-            var played = {len([m for m in WC_SCHEDULE if get_match_score(m["team1"],m["team2"],live_scores_mi)[0] is not None])};
-            document.getElementById('nmt-display') && (function(){{
-                var el = document.getElementById('nmt-display');
-                if(!el) return;
-                function tick(){{
-                    var now = Date.now();
-                    var diff = new Date('{next_match["date"]}T{next_match.get("time","18:00 ET").replace(" ET","").replace(" PM ET","").replace(" AM ET","")}').getTime() - now;
-                    if(diff<=0){{ el.textContent='Starting now!'; return; }}
-                    var h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
-                    el.textContent=(h>0?h+'h ':'')+(m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';
-                }}
-                tick(); setInterval(tick,1000);
-            }})();
-        }})();
-        </script>'''), unsafe_allow_html=True)
+        f_t1n = FLAGS.get(NATION_TO_CODE.get(next_match["team1"],""),"")
+        f_t2n = FLAGS.get(NATION_TO_CODE.get(next_match["team2"],""),"")
+        import re as _re
+        time_str = next_match.get("time","12:00 PM ET")
+        hr_match = _re.search(r"(\d+):(\d+)\s*(AM|PM)", time_str)
+        if hr_match:
+            hh=int(hr_match.group(1)); mm=int(hr_match.group(2)); ap=hr_match.group(3)
+            if ap=="PM" and hh!=12: hh+=12
+            if ap=="AM" and hh==12: hh=0
+            hh+=5
+        else:
+            hh,mm=18,0
+        dp=next_match["date"].split("-")
+        target_ms=int(datetime(int(dp[0]),int(dp[1]),int(dp[2]),hh,mm,0,tzinfo=timezone.utc).timestamp()*1000)
+        t1_name=next_match["team1"]; t2_name=next_match["team2"]
+        t1_city=next_match["city"]; t1_date=next_match["date"]; t1_time=next_match["time"]
+        nm_html = (
+            "<!DOCTYPE html><html><body style='margin:0;background:#061a06;'>"
+            "<div style='background:linear-gradient(135deg,rgba(8,32,8,0.95),rgba(3,12,3,0.98));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
+            "<div>"
+            "<div style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:4px;'>Next Match</div>"
+            f"<div style='font-size:1.1rem;font-weight:800;color:#f0fdf4;'>{f_t1n} {t1_name} <span style='color:#4b7c4b;font-size:0.85rem;'>vs</span> {t2_name} {f_t2n}</div>"
+            f"<div style='font-size:0.75rem;color:#86efac;margin-top:3px;'>{t1_date} - {t1_time} - {t1_city}</div>"
+            "</div>"
+            "<div style='text-align:center;'>"
+            "<div style='font-size:0.65rem;color:#4b7c4b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;'>Starts in</div>"
+            "<div id='nmt' style='font-size:1.6rem;font-weight:900;color:#fbbf24;'>--</div>"
+            "</div></div>"
+            f"<script>var t={target_ms};"
+            "function tick(){var d=t-Date.now();var el=document.getElementById('nmt');if(!el)return;"
+            "if(d<=0){el.textContent='NOW';return;}"
+            "var h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);"
+            "el.textContent=(h>0?h+'h ':'')+( m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';}"
+            "tick();setInterval(tick,1000);</script></body></html>"
+        )
+        components.html(nm_html, height=110)
 
     # Results so far banner
     completed = sum(1 for m in WC_SCHEDULE if get_match_score(m["team1"],m["team2"],live_scores_mi)[0] is not None)
