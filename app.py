@@ -393,7 +393,84 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
+# ── LIVE / NEXT MATCH IN HERO ─────────────────────────────────────────────
+import re as _re_hero
+from datetime import timedelta as _td
 
+def _get_hero_banner():
+    try:
+        _ls = fetch_live_scores()
+    except:
+        _ls = {}
+    _now = datetime.now(timezone.utc)
+    _live_m = None; _next_m = None
+    for _m in WC_SCHEDULE:
+        _s1,_s2,_,_ = get_match_score(_m["team1"],_m["team2"],_ls)
+        if _s1 is None:
+            # Check if live (match time within last 2 hours)
+            try:
+                _ts = _re_hero.search(r"(\d+):(\d+)\s*(AM|PM)", _m.get("time",""))
+                if _ts:
+                    _hh=int(_ts.group(1)); _mm=int(_ts.group(2)); _ap=_ts.group(3)
+                    if _ap=="PM" and _hh!=12: _hh+=12
+                    if _ap=="AM" and _hh==12: _hh=0
+                    _dp=_m["date"].split("-")
+                    _mut=datetime(int(_dp[0]),int(_dp[1]),int(_dp[2]),_hh,_mm,0,tzinfo=timezone.utc)+_td(hours=5)
+                    _diff=(_now-_mut).total_seconds()/60
+                    if 0<=_diff<=110 and _live_m is None:
+                        _live_m=_m
+            except: pass
+            if _next_m is None: _next_m=_m
+    return _live_m, _next_m, _ls
+
+_live_m, _next_m, _ls = _get_hero_banner()
+_bm = _live_m if _live_m else _next_m
+
+if _bm:
+    _ft1 = FLAGS.get(NATION_TO_CODE.get(_bm["team1"],""),"")
+    _ft2 = FLAGS.get(NATION_TO_CODE.get(_bm["team2"],""),"")
+    if _live_m:
+        # Show LIVE banner
+        st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(40,5,5,0.95),rgba(20,2,2,0.98));border:1px solid rgba(239,68,68,0.35);border-radius:14px;padding:14px 28px;margin-bottom:8px;display:flex;align-items:center;gap:20px;">
+            <div style="font-size:1.3rem;font-weight:900;color:#ef4444;">🔴 LIVE</div>
+            <div>
+                <div style="font-size:1rem;font-weight:800;color:#f0fdf4;">{_ft1} {_bm["team1"]} vs {_bm["team2"]} {_ft2}</div>
+                <div style="font-size:0.72rem;color:#fca5a5;margin-top:2px;">{_bm.get("venue","")} · {_bm.get("city","")} · {_bm.get("time","")}</div>
+            </div>
+        </div>'''), unsafe_allow_html=True)
+    else:
+        # Show next match countdown
+        try:
+            _ts2 = _re_hero.search(r"(\d+):(\d+)\s*(AM|PM)", _bm.get("time",""))
+            if _ts2:
+                _h2=int(_ts2.group(1)); _m2=int(_ts2.group(2)); _a2=_ts2.group(3)
+                if _a2=="PM" and _h2!=12: _h2+=12
+                if _a2=="AM" and _h2==12: _h2=0
+                _dp2=_bm["date"].split("-")
+                _tms=int((datetime(int(_dp2[0]),int(_dp2[1]),int(_dp2[2]),_h2,_m2,0,tzinfo=timezone.utc)+_td(hours=5)).timestamp()*1000)
+            else: _tms=0
+        except: _tms=0
+        _hero_html = (
+            "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
+            "<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));border:1px solid rgba(74,222,128,0.18);border-radius:14px;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
+            "<div>"
+            "<div style='font-size:0.6rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.18em;font-weight:700;margin-bottom:5px;'>Next Match</div>"
+            f"<div style='font-size:1.05rem;font-weight:800;color:#f0fdf4;'>{_ft1} {_bm['team1']} <span style='color:#4b7c4b;font-size:0.8rem;padding:0 4px;'>vs</span> {_bm['team2']} {_ft2}</div>"
+            f"<div style='font-size:0.7rem;color:#86efac;margin-top:3px;'>{_bm['date']} · {_bm['time']} · {_bm['city']}</div>"
+            "</div>"
+            "<div style='text-align:right;'>"
+            "<div style='font-size:0.6rem;color:#4b7c4b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:3px;'>Starts in</div>"
+            "<div id='hero-timer' style='font-size:1.8rem;font-weight:900;color:#fbbf24;font-variant-numeric:tabular-nums;'>--</div>"
+            "</div></div>"
+            f"<script>var T={_tms};"
+            "function tick(){{var d=T-Date.now();var el=document.getElementById('hero-timer');if(!el)return;"
+            "if(d<=0){{el.textContent='Starting!';return;}}"
+            "var h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);"
+            "el.textContent=(h>0?h+'h ':'')+( m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';}}"
+            "tick();setInterval(tick,1000);</script>"
+            "</body></html>"
+        )
+        st.components.v1.html(_hero_html, height=90)
 
 # ── LOAD DATA ─────────────────────────────────────────────────────────────
 @st.cache_data
@@ -470,124 +547,6 @@ tab_mi, tab_sched, tab_nat = st.tabs([
 with tab_mi:
     st.markdown('<p class="page-title">🔥 Match Intelligence</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">Every match. Every star. Every storyline. Your pregame scouting report.</p>', unsafe_allow_html=True)
-
-    # Smart live/next match banner
-    import re as _re2
-    from datetime import timedelta
-    _live_sc = fetch_live_scores()
-    _now = datetime.now(timezone.utc)
-    _live_m = None; _next_m = None
-    for _m in WC_SCHEDULE:
-        _s1,_s2,_,_ = get_match_score(_m["team1"],_m["team2"],_live_sc)
-        if _s1 is None:
-            try:
-                _ts = _re2.search(r"(\d+):(\d+)\s*(AM|PM)", _m.get("time",""))
-                if _ts:
-                    _hh=int(_ts.group(1)); _mm=int(_ts.group(2)); _ap=_ts.group(3)
-                    if _ap=="PM" and _hh!=12: _hh+=12
-                    if _ap=="AM" and _hh==12: _hh=0
-                    _dp=_m["date"].split("-")
-                    _mut=datetime(int(_dp[0]),int(_dp[1]),int(_dp[2]),_hh,_mm,0,tzinfo=timezone.utc)+timedelta(hours=5)
-                    _diff=(_now-_mut).total_seconds()/60
-                    if 0<=_diff<=120: _live_m=_m
-            except: pass
-            if _next_m is None: _next_m=_m
-    _bm = _live_m if _live_m else _next_m
-    _is_live = _live_m is not None
-    if _bm:
-        _ft1=FLAGS.get(NATION_TO_CODE.get(_bm["team1"],""),"")
-        _ft2=FLAGS.get(NATION_TO_CODE.get(_bm["team2"],""),"")
-        if _is_live:
-            st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(40,8,8,0.95),rgba(20,3,3,0.98));border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:14px 24px;margin-bottom:16px;display:flex;align-items:center;gap:16px;">
-                <div style="font-size:1.4rem;font-weight:900;color:#ef4444;">🔴 LIVE</div>
-                <div>
-                    <div style="font-size:1rem;font-weight:800;color:#f0fdf4;">{_ft1} {_bm["team1"]} vs {_bm["team2"]} {_ft2}</div>
-                    <div style="font-size:0.72rem;color:#fca5a5;">{_bm["venue"]} · {_bm["city"]}</div>
-                </div>
-            </div>'''), unsafe_allow_html=True)
-        else:
-            try:
-                _ts2=_re2.search(r"(\d+):(\d+)\s*(AM|PM)",_bm.get("time",""))
-                if _ts2:
-                    _h2=int(_ts2.group(1));_m2=int(_ts2.group(2));_a2=_ts2.group(3)
-                    if _a2=="PM" and _h2!=12: _h2+=12
-                    if _a2=="AM" and _h2==12: _h2=0
-                    _dp2=_bm["date"].split("-")
-                    _tms=int((datetime(int(_dp2[0]),int(_dp2[1]),int(_dp2[2]),_h2,_m2,0,tzinfo=timezone.utc)+timedelta(hours=5)).timestamp()*1000)
-                else: _tms=0
-            except: _tms=0
-            _nm_html=(
-                "<!DOCTYPE html><html><body style='margin:0;background:#061a06;'>"
-                "<div style='background:linear-gradient(135deg,rgba(8,32,8,0.95),rgba(3,12,3,0.98));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
-                "<div><div style='font-size:0.62rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:4px;'>Next Match</div>"
-                f"<div style='font-size:1rem;font-weight:800;color:#f0fdf4;'>{_ft1} {_bm['team1']} <span style='color:#4b7c4b;'>vs</span> {_bm['team2']} {_ft2}</div>"
-                f"<div style='font-size:0.72rem;color:#86efac;margin-top:2px;'>{_bm['date']} · {_bm['time']} · {_bm['city']}</div>"
-                "</div><div style='text-align:center;'>"
-                "<div style='font-size:0.62rem;color:#4b7c4b;text-transform:uppercase;margin-bottom:3px;'>Starts in</div>"
-                "<div id='nmt' style='font-size:1.5rem;font-weight:900;color:#fbbf24;'>--</div>"
-                "</div></div>"
-                f"<script>var t={_tms};"
-                "function tick(){var d=t-Date.now();var el=document.getElementById('nmt');if(!el)return;"
-                "if(d<=0){el.textContent='NOW';return;}"
-                "var h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);"
-                "el.textContent=(h>0?h+'h ':'')+( m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';}"
-                "tick();setInterval(tick,1000);</script></body></html>"
-            )
-            st.components.v1.html(_nm_html, height=100)
-
-    # ── LIVE / NEXT MATCH BANNER ──────────────────────────────────────────
-    live_scores_mi = fetch_live_scores()
-    now_utc = datetime.now(timezone.utc)
-    # Find next unplayed match from WC_SCHEDULE
-    next_match = None
-    for m in WC_SCHEDULE:
-        s1, s2, _, _ = get_match_score(m["team1"], m["team2"], live_scores_mi)
-        if s1 is None:  # not played yet
-            next_match = m
-            break
-    if next_match:
-        f_t1n = FLAGS.get(NATION_TO_CODE.get(next_match["team1"],""),"")
-        f_t2n = FLAGS.get(NATION_TO_CODE.get(next_match["team2"],""),"")
-        import re as _re
-        from datetime import timedelta
-        time_str = next_match.get("time","12:00 PM ET")
-        hr_match = _re.search(r"(\d+):(\d+)\s*(AM|PM)", time_str)
-        if hr_match:
-            hh=int(hr_match.group(1)); mm=int(hr_match.group(2)); ap=hr_match.group(3)
-            if ap=="PM" and hh!=12: hh+=12
-            if ap=="AM" and hh==12: hh=0
-        else:
-            hh,mm=17,0
-        try:
-            dp=next_match["date"].split("-")
-            # Build as ET then add 5h for UTC (use timedelta to avoid hour overflow)
-            et_dt=datetime(int(dp[0]),int(dp[1]),int(dp[2]),hh,mm,0,tzinfo=timezone.utc)+timedelta(hours=5)
-            target_ms=int(et_dt.timestamp()*1000)
-        except:
-            target_ms=int((datetime.now(timezone.utc)+timedelta(hours=2)).timestamp()*1000)
-        t1_name=next_match["team1"]; t2_name=next_match["team2"]
-        t1_city=next_match["city"]; t1_date=next_match["date"]; t1_time=next_match["time"]
-        nm_html = (
-            "<!DOCTYPE html><html><body style='margin:0;background:#061a06;'>"
-            "<div style='background:linear-gradient(135deg,rgba(8,32,8,0.95),rgba(3,12,3,0.98));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:16px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
-            "<div>"
-            "<div style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:4px;'>Next Match</div>"
-            f"<div style='font-size:1.1rem;font-weight:800;color:#f0fdf4;'>{f_t1n} {t1_name} <span style='color:#4b7c4b;font-size:0.85rem;'>vs</span> {t2_name} {f_t2n}</div>"
-            f"<div style='font-size:0.75rem;color:#86efac;margin-top:3px;'>{t1_date} - {t1_time} - {t1_city}</div>"
-            "</div>"
-            "<div style='text-align:center;'>"
-            "<div style='font-size:0.65rem;color:#4b7c4b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;'>Starts in</div>"
-            "<div id='nmt' style='font-size:1.6rem;font-weight:900;color:#fbbf24;'>--</div>"
-            "</div></div>"
-            f"<script>var t={target_ms};"
-            "function tick(){var d=t-Date.now();var el=document.getElementById('nmt');if(!el)return;"
-            "if(d<=0){el.textContent='NOW';return;}"
-            "var h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);"
-            "el.textContent=(h>0?h+'h ':'')+( m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';}"
-            "tick();setInterval(tick,1000);</script></body></html>"
-        )
-        components.html(nm_html, height=110)
-
 
 
     col_sel1, col_sel2 = st.columns(2)
