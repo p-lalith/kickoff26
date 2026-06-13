@@ -32,36 +32,7 @@ API_NAME_MAP = {
     "Turkey": "Turkiye",
 }
 
-@st.cache_data(ttl=300)
-def fetch_live_scores():
-    try:
-        url = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
-        resp = urllib.request.urlopen(req, timeout=6)
-        data = _json.loads(resp.read())
-        scores = {}
-        for m in data.get("matches", []):
-            t1 = API_NAME_MAP.get(m.get("team1","").strip(), m.get("team1","").strip())
-            t2 = API_NAME_MAP.get(m.get("team2","").strip(), m.get("team2","").strip())
-            ft = m.get("score", {}).get("ft")
-            if ft:
-                scores[f"{t1}|{t2}"] = {"ft": ft, "goals1": m.get("goals1",[]), "goals2": m.get("goals2",[])}
-        return scores
-    except:
-        return {}
 
-def get_match_score(team1, team2, live_scores):
-    for k in [f"{team1}|{team2}", f"{team2}|{team1}"]:
-        if k in live_scores:
-            s = live_scores[k]
-            ft = s["ft"]
-            if k == f"{team1}|{team2}":
-                return ft[0], ft[1], s.get("goals1",[]), s.get("goals2",[])
-            else:
-                return ft[1], ft[0], s.get("goals2",[]), s.get("goals1",[])
-    return None, None, [], []
-
-# ── LIVE SCORES (openfootball — free, no key, updates daily) ─────────────
 API_NAME_MAP = {
     "Czech Republic": "Czechia",
     "Bosnia & Herzegovina": "Bosnia-Herzegovina",
@@ -442,7 +413,10 @@ def _get_hero_banner():
             _next_m = _m
     return _live_m, _next_m, _ls
 
-_live_m, _next_m, _ls = _get_hero_banner()
+try:
+    _live_m, _next_m, _ls = _get_hero_banner()
+except Exception as _e:
+    _live_m, _next_m, _ls = None, None, {}
 _bm = _live_m if _live_m else _next_m
 
 if _bm:
