@@ -588,12 +588,7 @@ with tab_mi:
         )
         components.html(nm_html, height=110)
 
-    # Results so far banner
-    completed = sum(1 for m in WC_SCHEDULE if get_match_score(m["team1"],m["team2"],live_scores_mi)[0] is not None)
-    if completed > 0:
-        st.markdown(clean_html(f'''<div style="background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.1);border-radius:10px;padding:8px 16px;margin-bottom:12px;font-size:0.78rem;color:#86efac;">
-            ✅ <strong style="color:#4ade80;">{completed} matches completed</strong> · {72-completed} remaining · Scores updated every 5 mins
-        </div>'''), unsafe_allow_html=True)
+
 
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
@@ -810,72 +805,7 @@ with tab_sched:
     # Load live scores
     live_scores = fetch_live_scores()
     # Countdown timer
-    # Pure JS self-ticking countdown — no Streamlit re-render needed
-    components.html("""
-<!DOCTYPE html>
-<html>
-<body style="margin:0;padding:0;background:#061a06;">
-<style>html{background:#061a06;}</style>
-<div id="wc-timer" style="background:linear-gradient(135deg,rgba(8,32,8,0.95),rgba(3,12,3,0.98));border:1px solid rgba(74,222,128,0.25);border-radius:20px;padding:28px;margin:16px 0;text-align:center;">
-  <div id="timer-label" style="font-size:0.78rem;color:#86efac;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:16px;">⚽ World Cup 2026 Kicks Off In</div>
-  <div id="timer-live" style="display:none;font-size:1.6rem;font-weight:900;color:#ef4444;margin:8px 0;">🔴 LIVE — World Cup 2026 Is Underway</div>
-  <div id="timer-boxes" style="display:flex;justify-content:center;gap:0;max-width:520px;margin:0 auto;">
-    <div style="flex:1;padding:16px 8px;border-right:1px solid rgba(74,222,128,0.1);">
-      <div id="t-days" style="font-size:3rem;font-weight:900;color:#4ade80;line-height:1;min-width:2ch;display:inline-block;">--</div>
-      <div style="font-size:0.7rem;color:#86efac;text-transform:uppercase;letter-spacing:0.1em;margin-top:4px;">Days</div>
-    </div>
-    <div style="flex:1;padding:16px 8px;border-right:1px solid rgba(74,222,128,0.1);">
-      <div id="t-hrs" style="font-size:3rem;font-weight:900;color:#4ade80;line-height:1;">--</div>
-      <div style="font-size:0.7rem;color:#86efac;text-transform:uppercase;letter-spacing:0.1em;margin-top:4px;">Hours</div>
-    </div>
-    <div style="flex:1;padding:16px 8px;border-right:1px solid rgba(74,222,128,0.1);">
-      <div id="t-min" style="font-size:3rem;font-weight:900;color:#fbbf24;line-height:1;">--</div>
-      <div style="font-size:0.7rem;color:#86efac;text-transform:uppercase;letter-spacing:0.1em;margin-top:4px;">Minutes</div>
-    </div>
-    <div style="flex:1;padding:16px 8px;">
-      <div id="t-sec" style="font-size:3rem;font-weight:900;color:#f472b6;line-height:1;">--</div>
-      <div style="font-size:0.7rem;color:#86efac;text-transform:uppercase;letter-spacing:0.1em;margin-top:4px;">Seconds</div>
-    </div>
-  </div>
-  <div style="margin-top:16px;font-size:0.8rem;color:#4b7c4b;">🏟️ Estadio Azteca · Mexico City · Mexico vs South Africa · Opening Match</div>
-</div>
-<script>
-(function(){
-  // WC kick-off: June 11 2026 20:00 UTC (3pm ET = UTC-5)
-  var target = new Date('2026-06-11T20:00:00Z').getTime();
-  function pad(n){return n<10?'0'+n:n;}
-  function tick(){
-    var now = Date.now();
-    var diff = target - now;
-    if(diff <= 0){
-      // Tournament has started — show live banner
-      var boxes = document.getElementById('timer-boxes');
-      var lbl   = document.getElementById('timer-label');
-      var live  = document.getElementById('timer-live');
-      if(boxes) boxes.style.display='none';
-      if(lbl)   lbl.style.display='none';
-      if(live)  live.style.display='block';
-      return;
-    }
-    var d = Math.floor(diff/86400000);
-    var h = Math.floor((diff%86400000)/3600000);
-    var m = Math.floor((diff%3600000)/60000);
-    var s = Math.floor((diff%60000)/1000);
-    var ed=document.getElementById('t-days');
-    var eh=document.getElementById('t-hrs');
-    var em=document.getElementById('t-min');
-    var es=document.getElementById('t-sec');
-    if(ed) ed.textContent=d;
-    if(eh) eh.textContent=pad(h);
-    if(em) em.textContent=pad(m);
-    if(es) es.textContent=pad(s);
-  }
-  tick();
-  setInterval(tick,1000);
-})();
-</script>
-</body></html>
-""", height=200)
+
 
     # Filter
     with st.expander("🔍 Filter by Group or Date", expanded=False):
@@ -916,13 +846,21 @@ with tab_sched:
             # Check live score
             s1, s2, g1, g2 = get_match_score(m["team1"], m["team2"], live_scores)
             if s1 is not None:
-                # Match played — show real score
+                # Match played — show real score + prediction accuracy
                 winner = m["team1"] if s1>s2 else (m["team2"] if s2>s1 else "Draw")
                 wcol = "#4ade80" if s1>s2 else ("#ef4444" if s2>s1 else "#fbbf24")
-                score_html = f'<div style="font-size:1.6rem;font-weight:900;color:#f0fdf4;letter-spacing:0.05em;">{s1} <span style="color:#4b7c4b;font-size:1rem;">—</span> {s2}</div><div style="font-size:0.72rem;color:{wcol};font-weight:700;">{"🏆 "+winner+" wins" if winner!="Draw" else "🤝 Draw"}</div>'
-                goals_html = ""
-                if g1: goals_html += " ".join([f'⚽ {g["name"]} {g["minute"]}\'' for g in g1])
-                right_html = f'<div style="text-align:right;min-width:200px;">{score_html}</div>'
+                pred_winner = m["team1"] if wp_1>wp_2 else (m["team2"] if wp_2>wp_1 else "Draw")
+                pred_flag = f_t1 if wp_1>wp_2 else (f_t2 if wp_2>wp_1 else "🤝")
+                correct = winner == pred_winner
+                pcol = "#4ade80" if correct else "#ef4444"
+                ptext = ("✅ Predicted " if correct else "❌ Predicted ") + f"{pred_flag} {pred_winner}"
+                right_html = (
+                    f'<div style="text-align:right;min-width:200px;">'
+                    f'<div style="font-size:1.5rem;font-weight:900;color:#f0fdf4;">{s1} <span style="color:#4b7c4b;font-size:0.9rem;">—</span> {s2}</div>'
+                    f'<div style="font-size:0.72rem;color:{wcol};font-weight:700;">{"🏆 "+winner+" wins" if winner!="Draw" else "🤝 Draw"}</div>'
+                    f'<div style="font-size:0.68rem;color:{pcol};margin-top:3px;font-weight:600;">{ptext}</div>'
+                    f'</div>'
+                )
             else:
                 # Not played yet — show prediction
                 pred_winner = m["team1"] if wp_1>wp_2 else (m["team2"] if wp_2>wp_1 else "Draw")
