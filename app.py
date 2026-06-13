@@ -1,4 +1,6 @@
 import streamlit as st
+import urllib.request
+import json as _json
 import streamlit.components.v1 as components
 import urllib.request
 import json as _json
@@ -21,6 +23,43 @@ setTimeout(function(){n.remove();},4000);})();
     st.markdown(js, unsafe_allow_html=True)
 
 WC_START = datetime(2026,6,11,20,0,0,tzinfo=timezone.utc)
+
+API_NAME_MAP = {
+    "Czech Republic": "Czechia",
+    "Bosnia & Herzegovina": "Bosnia-Herzegovina",
+    "USA": "United States",
+    "DR Congo": "Congo DR",
+    "Turkey": "Turkiye",
+}
+
+@st.cache_data(ttl=300)
+def fetch_live_scores():
+    try:
+        url = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=6)
+        data = _json.loads(resp.read())
+        scores = {}
+        for m in data.get("matches", []):
+            t1 = API_NAME_MAP.get(m.get("team1","").strip(), m.get("team1","").strip())
+            t2 = API_NAME_MAP.get(m.get("team2","").strip(), m.get("team2","").strip())
+            ft = m.get("score", {}).get("ft")
+            if ft:
+                scores[f"{t1}|{t2}"] = {"ft": ft, "goals1": m.get("goals1",[]), "goals2": m.get("goals2",[])}
+        return scores
+    except:
+        return {}
+
+def get_match_score(team1, team2, live_scores):
+    for k in [f"{team1}|{team2}", f"{team2}|{team1}"]:
+        if k in live_scores:
+            s = live_scores[k]
+            ft = s["ft"]
+            if k == f"{team1}|{team2}":
+                return ft[0], ft[1], s.get("goals1",[]), s.get("goals2",[])
+            else:
+                return ft[1], ft[0], s.get("goals2",[]), s.get("goals1",[])
+    return None, None, [], []
 
 # ── LIVE SCORES (openfootball — free, no key, updates daily) ─────────────
 API_NAME_MAP = {
@@ -432,6 +471,70 @@ with tab_mi:
     st.markdown('<p class="page-title">🔥 Match Intelligence</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">Every match. Every star. Every storyline. Your pregame scouting report.</p>', unsafe_allow_html=True)
 
+    # Smart live/next match banner
+    import re as _re2
+    from datetime import timedelta
+    _live_sc = fetch_live_scores()
+    _now = datetime.now(timezone.utc)
+    _live_m = None; _next_m = None
+    for _m in WC_SCHEDULE:
+        _s1,_s2,_,_ = get_match_score(_m["team1"],_m["team2"],_live_sc)
+        if _s1 is None:
+            try:
+                _ts = _re2.search(r"(\d+):(\d+)\s*(AM|PM)", _m.get("time",""))
+                if _ts:
+                    _hh=int(_ts.group(1)); _mm=int(_ts.group(2)); _ap=_ts.group(3)
+                    if _ap=="PM" and _hh!=12: _hh+=12
+                    if _ap=="AM" and _hh==12: _hh=0
+                    _dp=_m["date"].split("-")
+                    _mut=datetime(int(_dp[0]),int(_dp[1]),int(_dp[2]),_hh,_mm,0,tzinfo=timezone.utc)+timedelta(hours=5)
+                    _diff=(_now-_mut).total_seconds()/60
+                    if 0<=_diff<=120: _live_m=_m
+            except: pass
+            if _next_m is None: _next_m=_m
+    _bm = _live_m if _live_m else _next_m
+    _is_live = _live_m is not None
+    if _bm:
+        _ft1=FLAGS.get(NATION_TO_CODE.get(_bm["team1"],""),"")
+        _ft2=FLAGS.get(NATION_TO_CODE.get(_bm["team2"],""),"")
+        if _is_live:
+            st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(40,8,8,0.95),rgba(20,3,3,0.98));border:1px solid rgba(239,68,68,0.3);border-radius:16px;padding:14px 24px;margin-bottom:16px;display:flex;align-items:center;gap:16px;">
+                <div style="font-size:1.4rem;font-weight:900;color:#ef4444;">🔴 LIVE</div>
+                <div>
+                    <div style="font-size:1rem;font-weight:800;color:#f0fdf4;">{_ft1} {_bm["team1"]} vs {_bm["team2"]} {_ft2}</div>
+                    <div style="font-size:0.72rem;color:#fca5a5;">{_bm["venue"]} · {_bm["city"]}</div>
+                </div>
+            </div>'''), unsafe_allow_html=True)
+        else:
+            try:
+                _ts2=_re2.search(r"(\d+):(\d+)\s*(AM|PM)",_bm.get("time",""))
+                if _ts2:
+                    _h2=int(_ts2.group(1));_m2=int(_ts2.group(2));_a2=_ts2.group(3)
+                    if _a2=="PM" and _h2!=12: _h2+=12
+                    if _a2=="AM" and _h2==12: _h2=0
+                    _dp2=_bm["date"].split("-")
+                    _tms=int((datetime(int(_dp2[0]),int(_dp2[1]),int(_dp2[2]),_h2,_m2,0,tzinfo=timezone.utc)+timedelta(hours=5)).timestamp()*1000)
+                else: _tms=0
+            except: _tms=0
+            _nm_html=(
+                "<!DOCTYPE html><html><body style='margin:0;background:#061a06;'>"
+                "<div style='background:linear-gradient(135deg,rgba(8,32,8,0.95),rgba(3,12,3,0.98));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:14px 24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;'>"
+                "<div><div style='font-size:0.62rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:4px;'>Next Match</div>"
+                f"<div style='font-size:1rem;font-weight:800;color:#f0fdf4;'>{_ft1} {_bm['team1']} <span style='color:#4b7c4b;'>vs</span> {_bm['team2']} {_ft2}</div>"
+                f"<div style='font-size:0.72rem;color:#86efac;margin-top:2px;'>{_bm['date']} · {_bm['time']} · {_bm['city']}</div>"
+                "</div><div style='text-align:center;'>"
+                "<div style='font-size:0.62rem;color:#4b7c4b;text-transform:uppercase;margin-bottom:3px;'>Starts in</div>"
+                "<div id='nmt' style='font-size:1.5rem;font-weight:900;color:#fbbf24;'>--</div>"
+                "</div></div>"
+                f"<script>var t={_tms};"
+                "function tick(){var d=t-Date.now();var el=document.getElementById('nmt');if(!el)return;"
+                "if(d<=0){el.textContent='NOW';return;}"
+                "var h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);"
+                "el.textContent=(h>0?h+'h ':'')+( m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';}"
+                "tick();setInterval(tick,1000);</script></body></html>"
+            )
+            st.components.v1.html(_nm_html, height=100)
+
     # ── LIVE / NEXT MATCH BANNER ──────────────────────────────────────────
     live_scores_mi = fetch_live_scores()
     now_utc = datetime.now(timezone.utc)
@@ -706,12 +809,6 @@ with tab_sched:
     st.markdown('<p class="page-sub">All 72 group stage matches · June 11 – June 25, 2026 · USA, Mexico & Canada</p>', unsafe_allow_html=True)
     # Load live scores
     live_scores = fetch_live_scores()
-    scored_count = sum(1 for v in live_scores.values() if v.get("ft"))
-    if scored_count > 0:
-        st.markdown(clean_html(f'''<div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:12px;padding:10px 18px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
-            <span style="color:#4ade80;font-size:1rem;">🟢</span>
-            <span style="color:#86efac;font-size:0.82rem;font-weight:600;">Live scores loaded · {scored_count} matches completed · Updates every 5 mins</span>
-        </div>'''), unsafe_allow_html=True)
     # Countdown timer
     # Pure JS self-ticking countdown — no Streamlit re-render needed
     components.html("""
