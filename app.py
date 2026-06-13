@@ -416,7 +416,10 @@ def _get_hero_banner():
 try:
     _live_m, _next_m, _ls = _get_hero_banner()
 except Exception as _e:
+    st.error(f"Banner error: {_e}")
     _live_m, _next_m, _ls = None, None, {}
+
+st.caption(f"DEBUG: live={_live_m['team1'] if _live_m else None} | next={_next_m['team1'] if _next_m else None} | UTC={__import__('datetime').datetime.now(__import__('datetime').timezone.utc).strftime('%H:%M')}")
 _bm = _live_m if _live_m else _next_m
 
 if _bm:
