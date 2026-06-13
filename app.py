@@ -446,17 +446,22 @@ with tab_mi:
         f_t1n = FLAGS.get(NATION_TO_CODE.get(next_match["team1"],""),"")
         f_t2n = FLAGS.get(NATION_TO_CODE.get(next_match["team2"],""),"")
         import re as _re
+        from datetime import timedelta
         time_str = next_match.get("time","12:00 PM ET")
         hr_match = _re.search(r"(\d+):(\d+)\s*(AM|PM)", time_str)
         if hr_match:
             hh=int(hr_match.group(1)); mm=int(hr_match.group(2)); ap=hr_match.group(3)
             if ap=="PM" and hh!=12: hh+=12
             if ap=="AM" and hh==12: hh=0
-            hh+=5
         else:
-            hh,mm=18,0
-        dp=next_match["date"].split("-")
-        target_ms=int(datetime(int(dp[0]),int(dp[1]),int(dp[2]),hh,mm,0,tzinfo=timezone.utc).timestamp()*1000)
+            hh,mm=17,0
+        try:
+            dp=next_match["date"].split("-")
+            # Build as ET then add 5h for UTC (use timedelta to avoid hour overflow)
+            et_dt=datetime(int(dp[0]),int(dp[1]),int(dp[2]),hh,mm,0,tzinfo=timezone.utc)+timedelta(hours=5)
+            target_ms=int(et_dt.timestamp()*1000)
+        except:
+            target_ms=int((datetime.now(timezone.utc)+timedelta(hours=2)).timestamp()*1000)
         t1_name=next_match["team1"]; t2_name=next_match["team2"]
         t1_city=next_match["city"]; t1_date=next_match["date"]; t1_time=next_match["time"]
         nm_html = (
