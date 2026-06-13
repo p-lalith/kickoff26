@@ -397,6 +397,29 @@ st.markdown("""
 import re as _re_hero
 from datetime import timedelta as _td
 
+# Month name to number map for schedule dates like "Jun 13"
+_MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
+              "Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+
+def _parse_match_utc(m):
+    """Parse match ET time to UTC datetime. EDT = UTC-4"""
+    try:
+        ts = _re_hero.search(r"(\d+):(\d+)\s*(AM|PM)", m.get("time",""))
+        if not ts: return None, None
+        hh=int(ts.group(1)); mm=int(ts.group(2)); ap=ts.group(3)
+        if ap=="PM" and hh!=12: hh+=12
+        if ap=="AM" and hh==12: hh=0
+        # Parse date like "Jun 13" -> month/day, year always 2026
+        parts = m["date"].split()
+        mon = _MONTH_MAP.get(parts[0], 6)
+        day = int(parts[1])
+        # ET is UTC-4 (EDT in June) so add 4 hours to convert to UTC
+        start_utc = datetime(2026, mon, day, hh, mm, 0, tzinfo=timezone.utc) + _td(hours=4)
+        end_utc = start_utc + _td(hours=2)  # assume 2hr match window
+        return start_utc, end_utc
+    except:
+        return None, None
+
 def _get_hero_banner():
     try:
         _ls = fetch_live_scores()
@@ -405,22 +428,18 @@ def _get_hero_banner():
     _now = datetime.now(timezone.utc)
     _live_m = None; _next_m = None
     for _m in WC_SCHEDULE:
+        _start, _end = _parse_match_utc(_m)
+        if _start is None: continue
+        # Already finished AND has a score → skip
         _s1,_s2,_,_ = get_match_score(_m["team1"],_m["team2"],_ls)
-        if _s1 is None:
-            # Check if live (match time within last 2 hours)
-            try:
-                _ts = _re_hero.search(r"(\d+):(\d+)\s*(AM|PM)", _m.get("time",""))
-                if _ts:
-                    _hh=int(_ts.group(1)); _mm=int(_ts.group(2)); _ap=_ts.group(3)
-                    if _ap=="PM" and _hh!=12: _hh+=12
-                    if _ap=="AM" and _hh==12: _hh=0
-                    _dp=_m["date"].split("-")
-                    _mut=datetime(int(_dp[0]),int(_dp[1]),int(_dp[2]),_hh,_mm,0,tzinfo=timezone.utc)+_td(hours=5)
-                    _diff=(_now-_mut).total_seconds()/60
-                    if 0<=_diff<=110 and _live_m is None:
-                        _live_m=_m
-            except: pass
-            if _next_m is None: _next_m=_m
+        if _s1 is not None:
+            continue  # scored = finished, skip
+        # Live: started but not finished (within 2hr window)
+        if _start <= _now <= _end and _live_m is None:
+            _live_m = _m
+        # Next upcoming: hasn't started yet
+        if _now < _start and _next_m is None:
+            _next_m = _m
     return _live_m, _next_m, _ls
 
 _live_m, _next_m, _ls = _get_hero_banner()
