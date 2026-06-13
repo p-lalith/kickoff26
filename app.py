@@ -1,5 +1,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
+import urllib.request
+import json as _json
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -19,6 +21,48 @@ setTimeout(function(){n.remove();},4000);})();
     st.markdown(js, unsafe_allow_html=True)
 
 WC_START = datetime(2026,6,11,20,0,0,tzinfo=timezone.utc)
+
+# ── LIVE SCORES (openfootball — free, no key, updates daily) ─────────────
+@st.cache_data(ttl=300)  # refresh every 5 minutes
+def fetch_live_scores():
+    try:
+        url = "https://raw.githubusercontent.com/openfootball/worldcup.json/master/2026/worldcup.json"
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0"})
+        resp = urllib.request.urlopen(req, timeout=6)
+        data = _json.loads(resp.read())
+        scores = {}
+        for m in data.get("matches", []):
+            t1 = m.get("team1","").strip()
+            t2 = m.get("team2","").strip()
+            score = m.get("score", {})
+            ft = score.get("ft")
+            ht = score.get("ht")
+            goals1 = m.get("goals1", [])
+            goals2 = m.get("goals2", [])
+            key = f"{t1}|{t2}"
+            scores[key] = {
+                "ft": ft,         # [g1, g2] or None if not played
+                "ht": ht,
+                "goals1": goals1,
+                "goals2": goals2,
+                "date": m.get("date",""),
+            }
+        return scores
+    except:
+        return {}
+
+def get_match_score(team1, team2, live_scores):
+    # Try both directions
+    for k in [f"{team1}|{team2}", f"{team2}|{team1}"]:
+        if k in live_scores:
+            s = live_scores[k]
+            ft = s.get("ft")
+            if ft:
+                if k == f"{team1}|{team2}":
+                    return ft[0], ft[1], s.get("goals1",[]), s.get("goals2",[])
+                else:
+                    return ft[1], ft[0], s.get("goals2",[]), s.get("goals1",[])
+    return None, None, [], []
 
 st.set_page_config(
     page_title="Kickoff 26 — Your Guide to the 2026 World Cup",
@@ -377,6 +421,57 @@ with tab_mi:
     st.markdown('<p class="page-title">🔥 Match Intelligence</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">Every match. Every star. Every storyline. Your pregame scouting report.</p>', unsafe_allow_html=True)
 
+    # ── LIVE / NEXT MATCH BANNER ──────────────────────────────────────────
+    live_scores_mi = fetch_live_scores()
+    now_utc = datetime.now(timezone.utc)
+    # Find next unplayed match from WC_SCHEDULE
+    next_match = None
+    for m in WC_SCHEDULE:
+        s1, s2, _, _ = get_match_score(m["team1"], m["team2"], live_scores_mi)
+        if s1 is None:  # not played yet
+            next_match = m
+            break
+    if next_match:
+        f_t1n = FLAGS.get(NATION_TO_CODE.get(next_match["team1"],""),"⚽")
+        f_t2n = FLAGS.get(NATION_TO_CODE.get(next_match["team2"],""),"⚽")
+        st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(8,32,8,0.9),rgba(3,12,3,0.95));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:16px 24px;margin-bottom:16px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+            <div>
+                <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.15em;font-weight:700;margin-bottom:4px;">⏱️ Next Match</div>
+                <div style="font-size:1.1rem;font-weight:800;color:#f0fdf4;">{f_t1n} {next_match["team1"]} <span style="color:#4b7c4b;font-size:0.85rem;">vs</span> {next_match["team2"]} {f_t2n}</div>
+                <div style="font-size:0.75rem;color:#86efac;margin-top:3px;">📅 {next_match["date"]} · ⏰ {next_match["time"]} · 📍 {next_match["city"]}</div>
+            </div>
+            <div id="next-match-timer" style="text-align:center;">
+                <div style="font-size:0.65rem;color:#4b7c4b;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:4px;">Starts in</div>
+                <div id="nmt-display" style="font-size:1.4rem;font-weight:900;color:#fbbf24;font-variant-numeric:tabular-nums;">--:--:--</div>
+            </div>
+        </div>
+        <script>
+        (function(){{
+            var scores = {{}};
+            {{}};
+            var played = {len([m for m in WC_SCHEDULE if get_match_score(m["team1"],m["team2"],live_scores_mi)[0] is not None])};
+            document.getElementById('nmt-display') && (function(){{
+                var el = document.getElementById('nmt-display');
+                if(!el) return;
+                function tick(){{
+                    var now = Date.now();
+                    var diff = new Date('{next_match["date"]}T{next_match.get("time","18:00 ET").replace(" ET","").replace(" PM ET","").replace(" AM ET","")}').getTime() - now;
+                    if(diff<=0){{ el.textContent='Starting now!'; return; }}
+                    var h=Math.floor(diff/3600000),m=Math.floor((diff%3600000)/60000),s=Math.floor((diff%60000)/1000);
+                    el.textContent=(h>0?h+'h ':'')+(m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';
+                }}
+                tick(); setInterval(tick,1000);
+            }})();
+        }})();
+        </script>'''), unsafe_allow_html=True)
+
+    # Results so far banner
+    completed = sum(1 for m in WC_SCHEDULE if get_match_score(m["team1"],m["team2"],live_scores_mi)[0] is not None)
+    if completed > 0:
+        st.markdown(clean_html(f'''<div style="background:rgba(74,222,128,0.05);border:1px solid rgba(74,222,128,0.1);border-radius:10px;padding:8px 16px;margin-bottom:12px;font-size:0.78rem;color:#86efac;">
+            ✅ <strong style="color:#4ade80;">{completed} matches completed</strong> · {72-completed} remaining · Scores updated every 5 mins
+        </div>'''), unsafe_allow_html=True)
+
     col_sel1, col_sel2 = st.columns(2)
     with col_sel1:
         sel_group = st.selectbox("📂 Group", [f"Group {g}" for g in GROUPS.keys()])
@@ -589,6 +684,14 @@ with tab_mi:
 with tab_sched:
     st.markdown('<p class="page-title">📅 Full Group Stage Schedule</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">All 72 group stage matches · June 11 – June 25, 2026 · USA, Mexico & Canada</p>', unsafe_allow_html=True)
+    # Load live scores
+    live_scores = fetch_live_scores()
+    scored_count = sum(1 for v in live_scores.values() if v.get("ft"))
+    if scored_count > 0:
+        st.markdown(clean_html(f'''<div style="background:rgba(74,222,128,0.06);border:1px solid rgba(74,222,128,0.15);border-radius:12px;padding:10px 18px;margin-bottom:12px;display:flex;align-items:center;gap:10px;">
+            <span style="color:#4ade80;font-size:1rem;">🟢</span>
+            <span style="color:#86efac;font-size:0.82rem;font-weight:600;">Live scores loaded · {scored_count} matches completed · Updates every 5 mins</span>
+        </div>'''), unsafe_allow_html=True)
     # Countdown timer
     # Pure JS self-ticking countdown — no Streamlit re-render needed
     components.html("""
@@ -693,7 +796,22 @@ with tab_sched:
             c1 = NATION_TO_CODE.get(m["team1"],""); c2 = NATION_TO_CODE.get(m["team2"],"")
             avg = round((team_avg(c1)+team_avg(c2))/2,1)
             ilabel,icolor,_ = get_intensity(avg)
-            html += f'<div class="sched-match"><div style="flex:1;"><div class="sched-teams">{f_t1} {m["team1"]} <span style="color:#4b7c4b;font-size:0.8rem;padding:0 8px;">vs</span> {m["team2"]} {f_t2}</div><div class="sched-meta" style="margin-top:4px;"><span style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.15);color:#4ade80;padding:2px 8px;border-radius:9999px;font-size:0.72rem;font-weight:600;margin-right:6px;">Group {m["group"]}</span>🏟️ {m["venue"]} · 📍 {m["city"]} · ⏰ {time_str}</div></div><div style="text-align:right;min-width:220px;"><div style="font-size:0.72rem;color:{icolor};font-weight:700;margin-bottom:3px;">{ilabel}</div><div style="font-size:0.74rem;color:#86efac;">{f_t1} {wp_1}% · Draw {wp_d}% · {wp_2}% {f_t2}</div><div class="prob-bar-wrap" style="width:140px;margin-left:auto;margin-top:4px;"><div class="prob-bar-fill" style="width:{wp_1}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div></div></div>'
+            # Check live score
+            s1, s2, g1, g2 = get_match_score(m["team1"], m["team2"], live_scores)
+            if s1 is not None:
+                # Match played — show real score
+                winner = m["team1"] if s1>s2 else (m["team2"] if s2>s1 else "Draw")
+                wcol = "#4ade80" if s1>s2 else ("#ef4444" if s2>s1 else "#fbbf24")
+                score_html = f'<div style="font-size:1.6rem;font-weight:900;color:#f0fdf4;letter-spacing:0.05em;">{s1} <span style="color:#4b7c4b;font-size:1rem;">—</span> {s2}</div><div style="font-size:0.72rem;color:{wcol};font-weight:700;">{"🏆 "+winner+" wins" if winner!="Draw" else "🤝 Draw"}</div>'
+                goals_html = ""
+                if g1: goals_html += " ".join([f'⚽ {g["name"]} {g["minute"]}\'' for g in g1])
+                right_html = f'<div style="text-align:right;min-width:200px;">{score_html}</div>'
+            else:
+                # Not played yet — show prediction
+                pred_winner = m["team1"] if wp_1>wp_2 else (m["team2"] if wp_2>wp_1 else "Draw")
+                pred_flag = f_t1 if wp_1>wp_2 else (f_t2 if wp_2>wp_1 else "🤝")
+                right_html = f'<div style="text-align:right;min-width:220px;"><div style="font-size:0.65rem;color:#4b7c4b;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:2px;">Predicted</div><div style="font-size:0.82rem;font-weight:700;color:#fbbf24;margin-bottom:4px;">{pred_flag} {pred_winner}</div><div style="font-size:0.72rem;color:{icolor};font-weight:700;margin-bottom:3px;">{ilabel}</div><div style="font-size:0.72rem;color:#86efac;">{f_t1} {wp_1}% · {wp_d}% Draw · {wp_2}% {f_t2}</div><div class="prob-bar-wrap" style="width:140px;margin-left:auto;margin-top:4px;"><div class="prob-bar-fill" style="width:{wp_1}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div></div>'
+            html += f'<div class="sched-match"><div style="flex:1;"><div class="sched-teams">{f_t1} {m["team1"]} <span style="color:#4b7c4b;font-size:0.8rem;padding:0 8px;">vs</span> {m["team2"]} {f_t2}</div><div class="sched-meta" style="margin-top:4px;"><span style="background:rgba(74,222,128,0.08);border:1px solid rgba(74,222,128,0.15);color:#4ade80;padding:2px 8px;border-radius:9999px;font-size:0.72rem;font-weight:600;margin-right:6px;">Group {m["group"]}</span>🏟️ {m["venue"]} · 📍 {m["city"]} · ⏰ {time_str}</div></div>{right_html}</div>'
         html += '</div>'
         st.markdown(clean_html(html),unsafe_allow_html=True)
 
