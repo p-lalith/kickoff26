@@ -367,6 +367,7 @@ st.markdown("""
 # ── LIVE / NEXT MATCH IN HERO ─────────────────────────────────────────────
 import re as _re_hero
 from datetime import timedelta as _td
+from datetime import timedelta
 
 # Month name to number map for schedule dates like "Jun 13"
 _MONTH_MAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,
@@ -385,8 +386,8 @@ def _parse_match_utc(m):
         mon = _MONTH_MAP.get(parts[0], 6)
         day = int(parts[1])
         # ET is UTC-4 (EDT in June) so add 4 hours to convert to UTC
-        start_utc = datetime(2026, mon, day, hh, mm, 0, tzinfo=timezone.utc) + _td(hours=4)
-        end_utc = start_utc + _td(hours=2)  # assume 2hr match window
+        start_utc = datetime(2026, mon, day, hh, mm, 0, tzinfo=timezone.utc) + timedelta(hours=4)
+        end_utc = start_utc + timedelta(hours=2)  # assume 2hr match window
         return start_utc, end_utc
     except:
         return None, None
