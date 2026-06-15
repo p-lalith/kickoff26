@@ -397,20 +397,28 @@ def _get_hero_banner():
     except:
         _ls = {}
     _now = datetime.now(timezone.utc)
-    _live_m = None; _next_m = None
-    for _m in WC_SCHEDULE:
+    _live_m = None; _next_m = None; _next_start = None
+
+    # Sort schedule by actual UTC time so we always get the real next match
+    def _sort_key(m):
+        s = _parse_match_utc(m)
+        return s if s else datetime(2099,1,1,tzinfo=timezone.utc)
+
+    for _m in sorted(WC_SCHEDULE, key=_sort_key):
         _start, _end = _parse_match_utc(_m)
         if _start is None: continue
-        # Already finished AND has a score → skip
         _s1,_s2,_,_ = get_match_score(_m["team1"],_m["team2"],_ls)
-        if _s1 is not None:
-            continue  # scored = finished, skip
-        # Live: started but not finished (within 2hr window)
+        # If scored by API → definitely finished
+        if _s1 is not None: continue
+        # If ended more than 30 mins ago → assume finished even if no API score yet
+        if _end < _now - timedelta(minutes=30): continue
+        # Live: within match window
         if _start <= _now <= _end and _live_m is None:
             _live_m = _m
-        # Next upcoming: hasn't started yet
-        if _now < _start and _next_m is None:
+        # Next: starts in the future, pick the soonest
+        if _now < _start and (_next_m is None or _start < _next_start):
             _next_m = _m
+            _next_start = _start
     return _live_m, _next_m, _ls
 
 try:
