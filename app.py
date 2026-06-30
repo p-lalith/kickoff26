@@ -103,6 +103,19 @@ FLAGS = {
     "HAI":"🇭🇹","CUW":"🇨🇼","TUR":"🇹🇷","EGY":"🇪🇬","SVN":"🇸🇮",
 }
 
+# Primary flag-accent color per nation code, used as a subtle left-border
+# accent on bracket team rows so each team carries its national color identity.
+TEAM_COLORS = {
+    "RSA":"#007A4D","CAN":"#FF0000","BRA":"#009739","JPN":"#BC002D",
+    "GER":"#DD0000","PAR":"#D52B1E","NED":"#FF6F00","MAR":"#C1272D",
+    "CIV":"#FF8200","NOR":"#BA0C2F","FRA":"#0055A4","SWE":"#006AA7",
+    "MEX":"#006847","ECU":"#FFD100","ENG":"#CE1124","COD":"#007FFF",
+    "BEL":"#ED2939","SEN":"#00853F","USA":"#3C3B6E","BIH":"#002395",
+    "ESP":"#AA151B","AUT":"#ED2939","SUI":"#FF0000","ALG":"#006233",
+    "POR":"#006600","CRO":"#FF0000","AUS":"#00008B","EGY":"#CE1126",
+    "ARG":"#74ACDF","CPV":"#003893","COL":"#FCD116","GHA":"#006B3F",
+}
+
 NATION_TO_CODE = {
     "Mexico":"MEX","South Africa":"RSA","South Korea":"KOR","Czechia":"CZE",
     "Canada":"CAN","Bosnia-Herzegovina":"BIH","Qatar":"QAT","Switzerland":"SUI",
@@ -1207,20 +1220,22 @@ def render_bracket_tree(live_scores):
             if is_live:
                 box_class += " live"
             
-            if t1 is None:
+            if t1 is None or t2 is None:
+                box_class += " empty"
+
+            if t1 is None and t2 is None:
                 t1_html = f'<div class="team-row placeholder">{match_data.get("label1", "TBD")}</div>'
                 t2_html = f'<div class="team-row placeholder">{match_data.get("label2", "TBD")}</div>'
-                box_class += " empty"
                 date_html = ""
             else:
-                flag1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
-                flag2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
-                
+                flag1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽") if t1 else ""
+                flag2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽") if t2 else ""
+
                 t1_cls = "team-row"
                 t2_cls = "team-row"
                 s1_h = ""
                 s2_h = ""
-                
+
                 if is_finished:
                     if winner == t1:
                         t1_cls += " winner"
@@ -1233,13 +1248,21 @@ def render_bracket_tree(live_scores):
                 elif is_live:
                     s1_h = f"<b>{s1 if s1 is not None else 0}</b>"
                     s2_h = f"<b>{s2 if s2 is not None else 0}</b>"
-                
-                t1_disp = f'{flag1} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t1}</span>'
-                t2_disp = f'{flag2} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t2}</span>'
-                
-                t1_html = f'<div class="{t1_cls}">{t1_disp} {s1_h}</div>'
-                t2_html = f'<div class="{t2_cls}">{t2_disp} {s2_h}</div>'
-                
+
+                if t1 is not None:
+                    c1 = TEAM_COLORS.get(NATION_TO_CODE.get(t1, ""), "rgba(74,222,128,0.3)")
+                    t1_disp = f'{flag1} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t1}</span>'
+                    t1_html = f'<div class="{t1_cls}" style="border-left: 3px solid {c1}; padding-left: 6px; border-radius: 2px;">{t1_disp} {s1_h}</div>'
+                else:
+                    t1_html = f'<div class="team-row placeholder">{match_data.get("label1", "TBD")}</div>'
+
+                if t2 is not None:
+                    c2 = TEAM_COLORS.get(NATION_TO_CODE.get(t2, ""), "rgba(74,222,128,0.3)")
+                    t2_disp = f'{flag2} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t2}</span>'
+                    t2_html = f'<div class="{t2_cls}" style="border-left: 3px solid {c2}; padding-left: 6px; border-radius: 2px;">{t2_disp} {s2_h}</div>'
+                else:
+                    t2_html = f'<div class="team-row placeholder">{match_data.get("label2", "TBD")}</div>'
+
                 date_val = match_data.get("date", "")
                 if round_name == "r32" and date_val:
                     date_html = f'<div class="bracket-date">{date_val}</div>'
@@ -1373,14 +1396,16 @@ def render_match_cards(live_scores):
             
         t1_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t1 else ""
         t2_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t2 else ""
+        c1 = TEAM_COLORS.get(NATION_TO_CODE.get(t1, ""), "rgba(74,222,128,0.3)")
+        c2 = TEAM_COLORS.get(NATION_TO_CODE.get(t2, ""), "rgba(74,222,128,0.3)")
         
         card_html = clean_html(f'''
         <div class="ko-card {glow_class}">
             <div class="ko-slot">{match["slot"]} · Round of 32</div>
             <div class="ko-teams">
-                <span style="{t1_bold}">{f1} {t1}</span>
+                <span style="{t1_bold} border-left:3px solid {c1}; padding-left:6px; border-radius:2px;">{f1} {t1}</span>
                 <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
-                <span style="{t2_bold}">{f2} {t2}</span>
+                <span style="{t2_bold} border-left:3px solid {c2}; padding-left:6px; border-radius:2px;">{f2} {t2}</span>
             </div>
             <div class="ko-meta">📅 {match["date"]} · 🏟️ {match["venue"]} · 📍 {match["city"]}</div>
             
