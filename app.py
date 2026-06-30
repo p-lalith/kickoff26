@@ -616,50 +616,67 @@ def _pretty_feed_label(feed_id):
         return f"Winner · SF{n}"
     return f"Winner · {feed_id}"
 
+def _resolve_match(t1, t2, live_scores):
+    """
+    Single source of truth for resolving a knockout match's state.
+    Returns (is_finished, winner, score_str, s1, s2, is_live).
+
+    Fixes two bugs from the previous per-block duplicated logic:
+    1. A tied full-time score with no ET/penalty data was previously
+       defaulting to "t2 wins" (since s1_ft > s2_ft was False). Now a
+       tie with no decisive data correctly stays unresolved (is_finished=False).
+    2. "Live" was previously guessed purely from the match date matching
+       today, even if kickoff hadn't happened yet. Now it's only flagged
+       live when the API actually shows in-progress signal (half-time
+       score or recorded goals) with no full-time result yet.
+    """
+    s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+
+    match_data = None
+    reversed_key = False
+    for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+        if k in live_scores:
+            match_data = live_scores[k]
+            reversed_key = (k == f"{t2}|{t1}")
+            break
+
+    if s1 is None:
+        is_live = False
+        if match_data:
+            ht = match_data.get("ht")
+            g1 = match_data.get("goals1") or []
+            g2 = match_data.get("goals2") or []
+            if ht is not None or g1 or g2:
+                is_live = True
+        return False, None, None, None, None, is_live
+
+    p = match_data.get("p") if match_data else None
+    et = match_data.get("et") if match_data else None
+    s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+
+    if p is not None:
+        s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+        winner = t1 if s1_p > s2_p else t2
+        return True, winner, f"{s1_ft}\u2013{s2_ft} ({s1_p}\u2013{s2_p} pen)", s1, s2, False
+    elif et is not None:
+        s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+        winner = t1 if s1_et > s2_et else t2
+        return True, winner, f"{s1_et}\u2013{s2_et} AET", s1, s2, False
+    elif s1_ft != s2_ft:
+        winner = t1 if s1_ft > s2_ft else t2
+        return True, winner, f"{s1_ft}\u2013{s2_ft}", s1, s2, False
+    else:
+        # Tied at full time, no ET/penalty data yet -- still pending, not finished
+        return False, None, f"{s1_ft}\u2013{s2_ft} (ET/pens pending)", s1, s2, True
+
 def get_bracket_data(live_scores):
     # R32
     r32 = {}
     for m in WC_ROUND_OF_32:
         slot = m["slot"]
         t1, t2 = m["team1"], m["team2"]
-        s1, s2, _, _ = get_match_score(t1, t2, live_scores)
-        is_finished = (s1 is not None)
-        
-        # Check if live
-        now_local = datetime.now(timezone.utc).astimezone()
-        month_name = now_local.strftime("%B")
-        day_val = str(now_local.day)
-        today_str = f"{month_name} {day_val}"
-        is_live = (not is_finished and m["date"] == today_str)
-        
-        winner = None
-        score_str = None
-        
-        if is_finished:
-            match_data = None
-            reversed_key = False
-            for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
-                if k in live_scores:
-                    match_data = live_scores[k]
-                    if k == f"{t2}|{t1}":
-                        reversed_key = True
-                    break
-            p = match_data.get("p") if match_data else None
-            et = match_data.get("et") if match_data else None
-            s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
-            
-            if p is not None:
-                s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-                winner = t1 if s1_p > s2_p else t2
-                score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-            elif et is not None:
-                s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-                winner = t1 if s1_et > s2_et else t2
-                score_str = f"{s1_et}–{s2_et} AET"
-            else:
-                winner = t1 if s1_ft > s2_ft else t2
-                score_str = f"{s1_ft}–{s2_ft}"
-                
+        is_finished, winner, score_str, s1, s2, is_live = _resolve_match(t1, t2, live_scores)
+
         r32[slot] = {
             "team1": t1,
             "team2": t2,
@@ -691,40 +708,16 @@ def get_bracket_data(live_scores):
         fa, fb = r32[feed_a], r32[feed_b]
         t1 = fa["winner"] if fa["is_finished"] else None
         t2 = fb["winner"] if fb["is_finished"] else None
-        
-        is_finished = False
-        winner = None
-        score_str = None
-        s1, s2 = None, None
-        
+
+        is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
         if t1 and t2:
-            s1, s2, _, _ = get_match_score(t1, t2, live_scores)
-            is_finished = (s1 is not None)
-            if is_finished:
-                match_data = None
-                reversed_key = False
-                for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
-                    if k in live_scores:
-                        match_data = live_scores[k]
-                        if k == f"{t2}|{t1}":
-                            reversed_key = True
-                        break
-                p = match_data.get("p") if match_data else None
-                et = match_data.get("et") if match_data else None
-                s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
-                
-                if p is not None:
-                    s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-                    winner = t1 if s1_p > s2_p else t2
-                    score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-                elif et is not None:
-                    s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-                    winner = t1 if s1_et > s2_et else t2
-                    score_str = f"{s1_et}–{s2_et} AET"
-                else:
-                    winner = t1 if s1_ft > s2_ft else t2
-                    score_str = f"{s1_ft}–{s2_ft}"
-                    
+            is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+        # Show the real "Team A or Team B" options from the feeder match instead
+        # of a generic placeholder, since both candidates are already known.
+        label1 = f"{fa['team1']} or {fa['team2']}" if not fa["is_finished"] else _pretty_feed_label(feed_a)
+        label2 = f"{fb['team1']} or {fb['team2']}" if not fb["is_finished"] else _pretty_feed_label(feed_b)
+
         r16[slot_id] = {
             "team1": t1,
             "team2": t2,
@@ -734,8 +727,8 @@ def get_bracket_data(live_scores):
             "is_finished": is_finished,
             "is_live": False,
             "score_str": score_str,
-            "label1": _pretty_feed_label(feed_a),
-            "label2": _pretty_feed_label(feed_b)
+            "label1": label1,
+            "label2": label2
         }
         
     # QF
@@ -751,40 +744,11 @@ def get_bracket_data(live_scores):
         fa, fb = r16[feed_a], r16[feed_b]
         t1 = fa["winner"] if fa["is_finished"] else None
         t2 = fb["winner"] if fb["is_finished"] else None
-        
-        is_finished = False
-        winner = None
-        score_str = None
-        s1, s2 = None, None
-        
+
+        is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
         if t1 and t2:
-            s1, s2, _, _ = get_match_score(t1, t2, live_scores)
-            is_finished = (s1 is not None)
-            if is_finished:
-                match_data = None
-                reversed_key = False
-                for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
-                    if k in live_scores:
-                        match_data = live_scores[k]
-                        if k == f"{t2}|{t1}":
-                            reversed_key = True
-                        break
-                p = match_data.get("p") if match_data else None
-                et = match_data.get("et") if match_data else None
-                s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
-                
-                if p is not None:
-                    s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-                    winner = t1 if s1_p > s2_p else t2
-                    score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-                elif et is not None:
-                    s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-                    winner = t1 if s1_et > s2_et else t2
-                    score_str = f"{s1_et}–{s2_et} AET"
-                else:
-                    winner = t1 if s1_ft > s2_ft else t2
-                    score_str = f"{s1_ft}–{s2_ft}"
-                    
+            is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
         qf[slot_id] = {
             "team1": t1,
             "team2": t2,
@@ -809,40 +773,11 @@ def get_bracket_data(live_scores):
         fa, fb = qf[feed_a], qf[feed_b]
         t1 = fa["winner"] if fa["is_finished"] else None
         t2 = fb["winner"] if fb["is_finished"] else None
-        
-        is_finished = False
-        winner = None
-        score_str = None
-        s1, s2 = None, None
-        
+
+        is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
         if t1 and t2:
-            s1, s2, _, _ = get_match_score(t1, t2, live_scores)
-            is_finished = (s1 is not None)
-            if is_finished:
-                match_data = None
-                reversed_key = False
-                for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
-                    if k in live_scores:
-                        match_data = live_scores[k]
-                        if k == f"{t2}|{t1}":
-                            reversed_key = True
-                        break
-                p = match_data.get("p") if match_data else None
-                et = match_data.get("et") if match_data else None
-                s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
-                
-                if p is not None:
-                    s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-                    winner = t1 if s1_p > s2_p else t2
-                    score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-                elif et is not None:
-                    s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-                    winner = t1 if s1_et > s2_et else t2
-                    score_str = f"{s1_et}–{s2_et} AET"
-                else:
-                    winner = t1 if s1_ft > s2_ft else t2
-                    score_str = f"{s1_ft}–{s2_ft}"
-                    
+            is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
         sf[slot_id] = {
             "team1": t1,
             "team2": t2,
@@ -860,40 +795,11 @@ def get_bracket_data(live_scores):
     fa, fb = sf["SF_1"], sf["SF_2"]
     t1 = fa["winner"] if fa["is_finished"] else None
     t2 = fb["winner"] if fb["is_finished"] else None
-    
-    is_finished = False
-    winner = None
-    score_str = None
-    s1, s2 = None, None
-    
+
+    is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
     if t1 and t2:
-        s1, s2, _, _ = get_match_score(t1, t2, live_scores)
-        is_finished = (s1 is not None)
-        if is_finished:
-            match_data = None
-            reversed_key = False
-            for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
-                if k in live_scores:
-                    match_data = live_scores[k]
-                    if k == f"{t2}|{t1}":
-                        reversed_key = True
-                    break
-            p = match_data.get("p") if match_data else None
-            et = match_data.get("et") if match_data else None
-            s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
-            
-            if p is not None:
-                s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-                winner = t1 if s1_p > s2_p else t2
-                score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-            elif et is not None:
-                s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-                winner = t1 if s1_et > s2_et else t2
-                score_str = f"{s1_et}–{s2_et} AET"
-            else:
-                winner = t1 if s1_ft > s2_ft else t2
-                score_str = f"{s1_ft}–{s2_ft}"
-                
+        is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
     final = {
         "team1": t1,
         "team2": t2,
@@ -925,7 +831,7 @@ def render_bracket_tree(live_scores):
 <style>
 .bracket-wrapper {
   overflow-x: auto;
-  padding: 20px 10px;
+  padding: 28px 16px;
   background: #030c03;
   border-radius: 16px;
   border: 1px solid rgba(74, 222, 128, 0.12);
@@ -933,78 +839,83 @@ def render_bracket_tree(live_scores):
 }
 .bracket-grid {
   display: grid;
-  grid-template-columns: 140px 20px 140px 20px 140px 20px 140px 20px 170px 20px 140px 20px 140px 20px 140px 20px 140px;
-  grid-template-rows: repeat(15, 60px);
+  grid-template-columns: 112px 14px 112px 14px 112px 14px 112px 14px 132px 14px 112px 14px 112px 14px 112px 14px 112px;
+  grid-template-rows: repeat(15, 66px);
   gap: 0;
   align-items: center;
   justify-content: center;
-  min-width: 1460px;
+  width: 100%;
+  max-width: 1140px;
   margin: 0 auto;
 }
 .bracket-box {
   background: rgba(8, 28, 8, 0.85);
-  border: 1px solid rgba(74, 222, 128, 0.15);
+  border: 1px solid rgba(74, 222, 128, 0.18);
   border-radius: 8px;
-  padding: 6px 10px;
+  padding: 7px 10px;
   display: flex;
   flex-direction: column;
   justify-content: center;
-  height: 48px;
-  font-size: 0.78rem;
+  height: 56px;
+  font-size: 0.92rem;
   box-shadow: 0 4px 6px rgba(0,0,0,0.15);
   transition: all 0.2s ease-in-out;
   box-sizing: border-box;
 }
 .bracket-box:hover {
-  border-color: rgba(74, 222, 128, 0.35);
-  transform: scale(1.02);
+  border-color: rgba(74, 222, 128, 0.4);
+  transform: scale(1.03);
+  z-index: 5;
 }
 .bracket-box.live {
-  border-color: rgba(239, 68, 68, 0.4);
-  background: rgba(40, 5, 5, 0.8);
-  box-shadow: 0 0 10px rgba(239,68,68,0.15);
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(40, 5, 5, 0.85);
+  box-shadow: 0 0 12px rgba(239,68,68,0.2);
 }
 .bracket-box.empty {
   background: rgba(5, 15, 5, 0.5);
-  border: 1px dashed rgba(74, 222, 128, 0.08);
+  border: 1px dashed rgba(74, 222, 128, 0.1);
 }
 .team-row {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  line-height: 1.3;
+  line-height: 1.35;
+  font-weight: 600;
 }
 .team-row.placeholder {
-  color: rgba(74, 222, 128, 0.45);
+  color: rgba(134, 239, 172, 0.65);
   font-style: italic;
-  font-size: 0.66rem;
+  font-size: 0.74rem;
   font-weight: 500;
   letter-spacing: 0.01em;
 }
 .team-row.placeholder::before {
   content: "›";
   margin-right: 5px;
-  color: rgba(251, 191, 36, 0.45);
+  color: rgba(251, 191, 36, 0.6);
   font-style: normal;
   font-weight: 800;
 }
 .team-row.winner {
-  font-weight: 700;
+  font-weight: 800;
   color: #f0fdf4;
 }
 .team-row.loser {
-  color: rgba(134, 239, 172, 0.3);
+  color: rgba(134, 239, 172, 0.45);
+  font-weight: 500;
 }
 .bracket-date {
-  font-size: 0.6rem;
-  color: rgba(74, 222, 128, 0.5);
+  font-size: 0.68rem;
+  color: rgba(134, 239, 172, 0.65);
   text-align: center;
   margin-top: 2px;
+  font-weight: 500;
 }
 .pulsing-dot {
   display: inline-block;
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   background-color: #ef4444;
   border-radius: 50%;
   margin-left: 4px;
@@ -1015,15 +926,41 @@ def render_bracket_tree(live_scores):
   50% { transform: scale(1.2); opacity: 0.5; }
   100% { transform: scale(0.9); opacity: 1; }
 }
+
+/* SF / FINAL — grand, elevated styling distinct from regular rounds */
+.bracket-box.grand-box {
+  height: 64px;
+  background: linear-gradient(145deg, rgba(40, 30, 6, 0.9), rgba(20, 16, 4, 0.95));
+  border: 1.5px solid rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.12), 0 4px 10px rgba(0,0,0,0.3);
+}
+.bracket-box.grand-box:hover {
+  border-color: rgba(251, 191, 36, 0.65);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.22), 0 4px 10px rgba(0,0,0,0.3);
+}
+.bracket-box.grand-box .team-row {
+  font-size: 0.98rem;
+}
+.bracket-box.grand-box .team-row.winner {
+  color: #fde68a;
+}
+.bracket-box.grand-box .team-row.placeholder {
+  color: rgba(251, 191, 36, 0.55);
+}
+.bracket-box.grand-box .team-row.placeholder::before {
+  color: rgba(251, 191, 36, 0.7);
+}
+
 .bracket-box.champion-box {
-  background: rgba(251, 191, 36, 0.06);
-  border: 2px solid rgba(251, 191, 36, 0.35);
-  box-shadow: 0 0 16px rgba(251, 191, 36, 0.15);
+  height: 64px;
+  background: linear-gradient(145deg, rgba(60, 44, 6, 0.95), rgba(251, 191, 36, 0.08));
+  border: 2px solid rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 26px rgba(251, 191, 36, 0.25), 0 4px 12px rgba(0,0,0,0.35);
 }
 .bracket-box.champion-box .team-row {
-  color: #fbbf24;
+  color: #fde68a;
   font-weight: 800;
-  font-size: 0.85rem;
+  font-size: 1.02rem;
   justify-content: center;
 }
 
@@ -1039,8 +976,8 @@ def render_bracket_tree(live_scores):
   left: 0;
   width: 50%;
   height: 50%;
-  border-top: 2px solid rgba(74,222,128,0.25);
-  border-right: 2px solid rgba(74,222,128,0.25);
+  border-top: 2px solid rgba(74,222,128,0.3);
+  border-right: 2px solid rgba(74,222,128,0.3);
 }
 .line-left-bottom {
   position: absolute;
@@ -1048,8 +985,8 @@ def render_bracket_tree(live_scores):
   left: 0;
   width: 50%;
   height: 50%;
-  border-bottom: 2px solid rgba(74,222,128,0.25);
-  border-right: 2px solid rgba(74,222,128,0.25);
+  border-bottom: 2px solid rgba(74,222,128,0.3);
+  border-right: 2px solid rgba(74,222,128,0.3);
 }
 .line-left-mid {
   position: absolute;
@@ -1057,7 +994,7 @@ def render_bracket_tree(live_scores):
   left: 50%;
   width: 50%;
   height: 0;
-  border-top: 2px solid rgba(74,222,128,0.25);
+  border-top: 2px solid rgba(74,222,128,0.3);
 }
 .line-left-vert {
   position: absolute;
@@ -1065,7 +1002,7 @@ def render_bracket_tree(live_scores):
   bottom: 0;
   left: 50%;
   width: 0;
-  border-left: 2px solid rgba(74,222,128,0.25);
+  border-left: 2px solid rgba(74,222,128,0.3);
 }
 .line-right-top {
   position: absolute;
@@ -1073,8 +1010,8 @@ def render_bracket_tree(live_scores):
   right: 0;
   width: 50%;
   height: 50%;
-  border-top: 2px solid rgba(74,222,128,0.25);
-  border-left: 2px solid rgba(74,222,128,0.25);
+  border-top: 2px solid rgba(74,222,128,0.3);
+  border-left: 2px solid rgba(74,222,128,0.3);
 }
 .line-right-bottom {
   position: absolute;
@@ -1082,8 +1019,8 @@ def render_bracket_tree(live_scores):
   right: 0;
   width: 50%;
   height: 50%;
-  border-bottom: 2px solid rgba(74,222,128,0.25);
-  border-left: 2px solid rgba(74,222,128,0.25);
+  border-bottom: 2px solid rgba(74,222,128,0.3);
+  border-left: 2px solid rgba(74,222,128,0.3);
 }
 .line-right-mid {
   position: absolute;
@@ -1091,7 +1028,7 @@ def render_bracket_tree(live_scores):
   right: 50%;
   width: 50%;
   height: 0;
-  border-top: 2px solid rgba(74,222,128,0.25);
+  border-top: 2px solid rgba(74,222,128,0.3);
 }
 .line-right-vert {
   position: absolute;
@@ -1099,7 +1036,7 @@ def render_bracket_tree(live_scores):
   bottom: 0;
   right: 50%;
   width: 0;
-  border-right: 2px solid rgba(74,222,128,0.25);
+  border-right: 2px solid rgba(74,222,128,0.3);
 }
 .line-champion-vert {
   position: absolute;
@@ -1107,7 +1044,7 @@ def render_bracket_tree(live_scores):
   top: 0;
   bottom: 0;
   width: 0;
-  border-left: 2px solid rgba(251,191,36,0.3);
+  border-left: 2px solid rgba(251,191,36,0.4);
 }
 
 /* Match Cards */
@@ -1265,6 +1202,8 @@ def render_bracket_tree(live_scores):
             is_live = match_data["is_live"]
             
             box_class = "bracket-box"
+            if round_name in ("sf", "final"):
+                box_class += " grand-box"
             if is_live:
                 box_class += " live"
             
@@ -1295,8 +1234,8 @@ def render_bracket_tree(live_scores):
                     s1_h = f"<b>{s1 if s1 is not None else 0}</b>"
                     s2_h = f"<b>{s2 if s2 is not None else 0}</b>"
                 
-                t1_disp = f'{flag1} <span style="display: inline-block; max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t1}</span>'
-                t2_disp = f'{flag2} <span style="display: inline-block; max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t2}</span>'
+                t1_disp = f'{flag1} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t1}</span>'
+                t2_disp = f'{flag2} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t2}</span>'
                 
                 t1_html = f'<div class="{t1_cls}">{t1_disp} {s1_h}</div>'
                 t2_html = f'<div class="{t2_cls}">{t2_disp} {s2_h}</div>'
