@@ -1734,6 +1734,18 @@ with tab_sched:
 # TAB 3 — KNOCKOUT BRACKET
 # ════════════════════════════════════════════════════════════════════════════
 with tab_bracket:
+    # Helper to find the next upcoming knockout match (Round of 32)
+    def _next_ko_match(ko_live):
+        """
+        Return the next upcoming knockout match from live scores.
+        Uses get_match_score to check if a match has recorded scores.
+        Returns the match dict or None if all are completed.
+        """
+        for m in ko_live:
+            s1, s2, _, _ = get_match_score(m["team1"], m["team2"], ko_live)
+            if s1 is None:
+                return m
+        return None
     st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">Follow the visual bracket tree and explore predicted matchups vs actual results.</p>', unsafe_allow_html=True)
     
