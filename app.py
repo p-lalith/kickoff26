@@ -252,16 +252,16 @@ WC_ROUND_OF_32 = [
 ]
 
 ROUND_OF_16_PAIRS = [
-    ("M1","M4"), ("M2","M3"), ("M5","M8"), ("M6","M7"),
-    ("M9","M12"), ("M10","M11"), ("M13","M16"), ("M14","M15"),
+    ("M3","M6"), ("M1","M4"), ("M13","M11"), ("M10","M9"),
+    ("M2","M5"), ("M7","M8"), ("M15","M14"), ("M12","M16"),
 ]
 
-# R16 → QF → SF → Final adjacency (Half 1 = M1–M8, Half 2 = M9–M16)
+# R16 → QF → SF → Final adjacency (Left side = M1,M3,M4,M6,M9,M10,M11,M13 / Right side = M2,M5,M7,M8,M12,M14,M15,M16)
 BRACKET_ADVANCE = {
-    "R16_1": ("M1","M4"), "R16_2": ("M2","M3"),
-    "R16_3": ("M5","M8"), "R16_4": ("M6","M7"),
-    "R16_5": ("M9","M12"), "R16_6": ("M10","M11"),
-    "R16_7": ("M13","M16"), "R16_8": ("M14","M15"),
+    "R16_1": ("M3","M6"), "R16_2": ("M1","M4"),
+    "R16_3": ("M13","M11"), "R16_4": ("M10","M9"),
+    "R16_5": ("M2","M5"), "R16_6": ("M7","M8"),
+    "R16_7": ("M15","M14"), "R16_8": ("M12","M16"),
     "QF_1": ("R16_1","R16_2"), "QF_2": ("R16_3","R16_4"),
     "QF_3": ("R16_5","R16_6"), "QF_4": ("R16_7","R16_8"),
     "SF_1": ("QF_1","QF_2"), "SF_2": ("QF_3","QF_4"),
@@ -602,6 +602,20 @@ def get_round_of_32_data():
     """Return the hardcoded Round of 32 matchups list."""
     return WC_ROUND_OF_32
 
+def _pretty_feed_label(feed_id):
+    """Convert a feed id like 'M3', 'R16_1', 'QF_1', 'SF_1' into a clean,
+    human-readable placeholder label for unplayed bracket slots."""
+    if feed_id.startswith("M"):
+        return f"Winner · Match {feed_id[1:]}"
+    if feed_id.startswith("R16_"):
+        return f"Winner · R16 #{feed_id.split('_')[1]}"
+    if feed_id.startswith("QF_"):
+        return f"Winner · QF{feed_id.split('_')[1]}"
+    if feed_id.startswith("SF"):
+        n = feed_id.replace("SF_", "").replace("SF", "")
+        return f"Winner · SF{n}"
+    return f"Winner · {feed_id}"
+
 def get_bracket_data(live_scores):
     # R32
     r32 = {}
@@ -662,14 +676,14 @@ def get_bracket_data(live_scores):
         
     # R16
     r16_slots = {
-        "R16_1": ("M1", "M4"),
-        "R16_2": ("M2", "M3"),
-        "R16_3": ("M5", "M8"),
-        "R16_4": ("M6", "M7"),
-        "R16_5": ("M9", "M12"),
-        "R16_6": ("M10", "M11"),
-        "R16_7": ("M13", "M16"),
-        "R16_8": ("M14", "M15"),
+        "R16_1": ("M3", "M6"),
+        "R16_2": ("M1", "M4"),
+        "R16_3": ("M13", "M11"),
+        "R16_4": ("M10", "M9"),
+        "R16_5": ("M2", "M5"),
+        "R16_6": ("M7", "M8"),
+        "R16_7": ("M15", "M14"),
+        "R16_8": ("M12", "M16"),
     }
     
     r16 = {}
@@ -720,8 +734,8 @@ def get_bracket_data(live_scores):
             "is_finished": is_finished,
             "is_live": False,
             "score_str": score_str,
-            "label1": f"W-{feed_a}",
-            "label2": f"W-{feed_b}"
+            "label1": _pretty_feed_label(feed_a),
+            "label2": _pretty_feed_label(feed_b)
         }
         
     # QF
@@ -780,8 +794,8 @@ def get_bracket_data(live_scores):
             "is_finished": is_finished,
             "is_live": False,
             "score_str": score_str,
-            "label1": f"W-{feed_a}",
-            "label2": f"W-{feed_b}"
+            "label1": _pretty_feed_label(feed_a),
+            "label2": _pretty_feed_label(feed_b)
         }
         
     # SF
@@ -838,8 +852,8 @@ def get_bracket_data(live_scores):
             "is_finished": is_finished,
             "is_live": False,
             "score_str": score_str,
-            "label1": f"W-{feed_a}",
-            "label2": f"W-{feed_b}"
+            "label1": _pretty_feed_label(feed_a),
+            "label2": _pretty_feed_label(feed_b)
         }
         
     # Final
@@ -889,8 +903,8 @@ def get_bracket_data(live_scores):
         "is_finished": is_finished,
         "is_live": False,
         "score_str": score_str,
-        "label1": "W-SF1",
-        "label2": "W-SF2"
+        "label1": _pretty_feed_label("SF1"),
+        "label2": _pretty_feed_label("SF2")
     }
     
     return {
@@ -961,9 +975,18 @@ def render_bracket_tree(live_scores):
   line-height: 1.3;
 }
 .team-row.placeholder {
-  color: rgba(74, 222, 128, 0.25);
+  color: rgba(74, 222, 128, 0.45);
   font-style: italic;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.team-row.placeholder::before {
+  content: "›";
+  margin-right: 5px;
+  color: rgba(251, 191, 36, 0.45);
+  font-style: normal;
+  font-weight: 800;
 }
 .team-row.winner {
   font-weight: 700;
@@ -1105,14 +1128,14 @@ def render_bracket_tree(live_scores):
     grid_cells = {}
     
     # Left Side Matches
-    grid_cells[(1, 1)] = ("match", "r32", "M1")
-    grid_cells[(1, 3)] = ("match", "r32", "M4")
-    grid_cells[(1, 5)] = ("match", "r32", "M2")
-    grid_cells[(1, 7)] = ("match", "r32", "M3")
-    grid_cells[(1, 9)] = ("match", "r32", "M5")
-    grid_cells[(1, 11)] = ("match", "r32", "M8")
-    grid_cells[(1, 13)] = ("match", "r32", "M6")
-    grid_cells[(1, 15)] = ("match", "r32", "M7")
+    grid_cells[(1, 1)] = ("match", "r32", "M3")
+    grid_cells[(1, 3)] = ("match", "r32", "M6")
+    grid_cells[(1, 5)] = ("match", "r32", "M1")
+    grid_cells[(1, 7)] = ("match", "r32", "M4")
+    grid_cells[(1, 9)] = ("match", "r32", "M13")
+    grid_cells[(1, 11)] = ("match", "r32", "M11")
+    grid_cells[(1, 13)] = ("match", "r32", "M10")
+    grid_cells[(1, 15)] = ("match", "r32", "M9")
     
     grid_cells[(3, 2)] = ("match", "r16", "R16_1")
     grid_cells[(3, 6)] = ("match", "r16", "R16_2")
@@ -1139,14 +1162,14 @@ def render_bracket_tree(live_scores):
     grid_cells[(15, 10)] = ("match", "r16", "R16_7")
     grid_cells[(15, 14)] = ("match", "r16", "R16_8")
     
-    grid_cells[(17, 1)] = ("match", "r32", "M9")
-    grid_cells[(17, 3)] = ("match", "r32", "M12")
-    grid_cells[(17, 5)] = ("match", "r32", "M10")
-    grid_cells[(17, 7)] = ("match", "r32", "M11")
-    grid_cells[(17, 9)] = ("match", "r32", "M13")
-    grid_cells[(17, 11)] = ("match", "r32", "M16")
-    grid_cells[(17, 13)] = ("match", "r32", "M14")
-    grid_cells[(17, 15)] = ("match", "r32", "M15")
+    grid_cells[(17, 1)] = ("match", "r32", "M2")
+    grid_cells[(17, 3)] = ("match", "r32", "M5")
+    grid_cells[(17, 5)] = ("match", "r32", "M7")
+    grid_cells[(17, 7)] = ("match", "r32", "M8")
+    grid_cells[(17, 9)] = ("match", "r32", "M15")
+    grid_cells[(17, 11)] = ("match", "r32", "M14")
+    grid_cells[(17, 13)] = ("match", "r32", "M12")
+    grid_cells[(17, 15)] = ("match", "r32", "M16")
     
     # Left Connectors
     # Col 2
@@ -1285,7 +1308,14 @@ def render_bracket_tree(live_scores):
                     date_html = ""
             
             live_dot = ' <span class="pulsing-dot"></span>' if is_live else ""
-            slot_label = f'<div style="font-size:0.5rem;color:rgba(74,222,128,0.4);font-weight:700;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;"><span>{slot_id}</span>{live_dot}</div>'
+            _slot_display = {
+                "r32": slot_id,
+                "r16": f"R16 · {slot_id.split('_')[1]}",
+                "qf": f"QF {slot_id.split('_')[1]}",
+                "sf": f"SF {slot_id.split('_')[1]}",
+                "final": "FINAL",
+            }.get(round_name, slot_id)
+            slot_label = f'<div style="font-size:0.5rem;color:rgba(74,222,128,0.4);font-weight:700;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;letter-spacing:0.04em;text-transform:uppercase;"><span>{_slot_display}</span>{live_dot}</div>'
             
             html.append(f'<div class="{box_class}" style="grid-column: {col}; grid-row: {row};">')
             html.append(slot_label)
