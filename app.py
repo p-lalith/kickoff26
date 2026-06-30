@@ -1329,104 +1329,108 @@ def render_bracket_tree(live_scores):
     
     st.markdown("".join(html), unsafe_allow_html=True)
 
-def render_match_cards(live_scores):
-    st.markdown("### ⚔️ Round of 32 — All 16 Matches")
+def _render_knockout_card(col, t1, t2, slot_label, round_title, meta_html, live_scores):
+    """Renders one prediction/result card for a single real matchup
+    (used for R32, and for R16/QF/SF/Final once both teams are confirmed)."""
+    f1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
+    f2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
+
+    pred_w, adj1, adj2 = knockout_predict(t1, t2)
+    wpct = adj1 if pred_w == t1 else adj2
+
+    is_finished, act_winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+    if is_finished:
+        is_correct = (act_winner == pred_w)
+        glow_class = "right-glow" if is_correct else "wrong-glow"
+        badge_html = f'<div class="ko-badge actual">{"✅ Right Prediction" if is_correct else "❌ Wrong Prediction"}</div>'
+
+        score_main = score_str
+        details = ""
+        if " " in score_str:
+            score_main, details = score_str.split(" ", 1)
+        score_parts = score_main.split("\u2013")
+        s1_part = score_parts[0]
+        s2_part = score_parts[1] if len(score_parts) > 1 else ""
+        details_html = f'<div style="font-size:0.9rem;color:#86efac;margin-top:2px;">{details}</div>' if details else ""
+
+        score_html = (
+            f'<div class="ko-score" style="margin-bottom:8px;">{f1} {s1_part} '
+            f'<span style="color:#4b7c4b;">\u2013</span> '
+            f'{s2_part} {f2}</div>'
+            f'{details_html}'
+        )
+    else:
+        act_winner = None
+        glow_class = ""
+        badge_html = f'<div class="ko-badge">Predicted: {f1 if pred_w==t1 else f2} {pred_w} {wpct}%</div>'
+        score_html = ""
+
+    t1_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t1 else ""
+    t2_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t2 else ""
+    c1 = TEAM_COLORS.get(NATION_TO_CODE.get(t1, ""), "rgba(74,222,128,0.3)")
+    c2 = TEAM_COLORS.get(NATION_TO_CODE.get(t2, ""), "rgba(74,222,128,0.3)")
+
+    card_html = clean_html(f'''
+    <div class="ko-card {glow_class}">
+        <div class="ko-slot">{slot_label} \u00b7 {round_title}</div>
+        <div class="ko-teams">
+            <span style="{t1_bold} border-left:3px solid {c1}; padding-left:6px; border-radius:2px;">{f1} {t1}</span>
+            <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
+            <span style="{t2_bold} border-left:3px solid {c2}; padding-left:6px; border-radius:2px;">{f2} {t2}</span>
+        </div>
+        {meta_html}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div class="star-box" style="padding:10px 14px;">
+                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f1} {t1}</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj1}%</div>
+                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj1}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+            </div>
+            <div class="star-box" style="padding:10px 14px;">
+                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f2} {t2}</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj2}%</div>
+                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj2}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+            </div>
+        </div>
+        {score_html}
+        {badge_html}
+    </div>''')
+
+    with col:
+        st.markdown(card_html, unsafe_allow_html=True)
+
+def render_match_cards(live_scores, bracket_data):
+    st.markdown("### \u2694\ufe0f Round of 32 \u2014 All 16 Matches")
     st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">Detailed model predictions and actual knockout results</p>', unsafe_allow_html=True)
-    
+
     cols = st.columns(2)
     for idx, match in enumerate(WC_ROUND_OF_32):
-        t1, t2 = match["team1"], match["team2"]
-        f1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
-        f2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
-        
-        pred_w, adj1, adj2 = knockout_predict(t1, t2)
-        wpct = adj1 if pred_w == t1 else adj2
-        
-        s1, s2, _, _ = get_match_score(t1, t2, live_scores)
-        is_finished = (s1 is not None)
-        
-        if is_finished:
-            match_data = None
-            reversed_key = False
-            for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
-                if k in live_scores:
-                    match_data = live_scores[k]
-                    if k == f"{t2}|{t1}":
-                        reversed_key = True
-                    break
-            p = match_data.get("p") if match_data else None
-            et = match_data.get("et") if match_data else None
-            s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
-            
-            if p is not None:
-                s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-                act_winner = t1 if s1_p > s2_p else t2
-                score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-            elif et is not None:
-                s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-                act_winner = t1 if s1_et > s2_et else t2
-                score_str = f"{s1_et}–{s2_et} AET"
-            else:
-                act_winner = t1 if s1_ft > s2_ft else t2
-                score_str = f"{s1_ft}–{s2_ft}"
-                
-            is_correct = (act_winner == pred_w)
-            glow_class = "right-glow" if is_correct else "wrong-glow"
-            badge_html = f'<div class="ko-badge actual">{"✅ Right Prediction" if is_correct else "❌ Wrong Prediction"}</div>'
-            
-            score_main = score_str
-            details = ""
-            if " " in score_str:
-                score_main, details = score_str.split(" ", 1)
-            score_parts = score_main.split("–")
-            s1_part = score_parts[0]
-            s2_part = score_parts[1] if len(score_parts) > 1 else ""
-            details_html = f'<div style="font-size:0.9rem;color:#86efac;margin-top:2px;">{details}</div>' if details else ""
-            
-            score_html = (
-                f'<div class="ko-score" style="margin-bottom:8px;">{f1} {s1_part} '
-                f'<span style="color:#4b7c4b;">–</span> '
-                f'{s2_part} {f2}</div>'
-                f'{details_html}'
-            )
-        else:
-            glow_class = ""
-            badge_html = f'<div class="ko-badge">Predicted: {f1 if pred_w==t1 else f2} {pred_w} {wpct}%</div>'
-            score_html = ""
-            
-        t1_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t1 else ""
-        t2_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t2 else ""
-        c1 = TEAM_COLORS.get(NATION_TO_CODE.get(t1, ""), "rgba(74,222,128,0.3)")
-        c2 = TEAM_COLORS.get(NATION_TO_CODE.get(t2, ""), "rgba(74,222,128,0.3)")
-        
-        card_html = clean_html(f'''
-        <div class="ko-card {glow_class}">
-            <div class="ko-slot">{match["slot"]} · Round of 32</div>
-            <div class="ko-teams">
-                <span style="{t1_bold} border-left:3px solid {c1}; padding-left:6px; border-radius:2px;">{f1} {t1}</span>
-                <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
-                <span style="{t2_bold} border-left:3px solid {c2}; padding-left:6px; border-radius:2px;">{f2} {t2}</span>
-            </div>
-            <div class="ko-meta">📅 {match["date"]} · 🏟️ {match["venue"]} · 📍 {match["city"]}</div>
-            
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
-                <div class="star-box" style="padding:10px 14px;">
-                    <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f1} {t1}</div>
-                    <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj1}%</div>
-                    <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj1}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
-                </div>
-                <div class="star-box" style="padding:10px 14px;">
-                    <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f2} {t2}</div>
-                    <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj2}%</div>
-                    <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj2}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
-                </div>
-            </div>
-            {score_html}
-            {badge_html}
-        </div>''')
-        
-        with cols[idx % 2]:
-            st.markdown(card_html, unsafe_allow_html=True)
+        meta_html = f'<div class="ko-meta">\U0001F4C5 {match["date"]} \u00b7 \U0001F3DF\ufe0f {match["venue"]} \u00b7 \U0001F4CD {match["city"]}</div>'
+        _render_knockout_card(cols[idx % 2], match["team1"], match["team2"], match["slot"], "Round of 32", meta_html, live_scores)
+
+    # Show prediction cards for later rounds ONLY once both teams in that
+    # matchup are actually confirmed -- never speculating multiple rounds
+    # ahead, just keeping pace with rounds as they become real.
+    round_defs = [
+        ("r16", "Round of 16", ["R16_1","R16_2","R16_3","R16_4","R16_5","R16_6","R16_7","R16_8"]),
+        ("qf", "Quarterfinals", ["QF_1","QF_2","QF_3","QF_4"]),
+        ("sf", "Semifinals", ["SF_1","SF_2"]),
+        ("final", "Final", ["FINAL"]),
+    ]
+    for round_key, round_title, slot_ids in round_defs:
+        live_slots = [sid for sid in slot_ids if bracket_data[round_key][sid]["team1"] and bracket_data[round_key][sid]["team2"]]
+        if not live_slots:
+            continue
+        st.markdown("---")
+        st.markdown(f"### \u2694\ufe0f {round_title} \u2014 {len(live_slots)} Match{'es' if len(live_slots)!=1 else ''} Confirmed")
+        st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">Updates automatically as earlier rounds are decided</p>', unsafe_allow_html=True)
+        rcols = st.columns(2)
+        for i, slot_id in enumerate(live_slots):
+            m = bracket_data[round_key][slot_id]
+            slot_display = "FINAL" if round_key == "final" else f"{round_title.split()[0]} {slot_id.split('_')[1]}" if "_" in slot_id else slot_id
+            _render_knockout_card(rcols[i % 2], m["team1"], m["team2"], slot_display, round_title, "", live_scores)
+
+
 
 def get_squad(team):
     code = NATION_TO_CODE.get(team,"")
@@ -1799,7 +1803,7 @@ with tab_bracket:
     st.markdown("### 🗺️ Visual Bracket Tree")
     render_bracket_tree(ko_live)
     
-    render_match_cards(ko_live)
+    render_match_cards(ko_live, get_bracket_data(ko_live))
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 4 — WC WATCHLIST
