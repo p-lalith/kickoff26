@@ -598,144 +598,836 @@ def _parse_ko_date_utc(match):
 def _ko_flag(team):
     return FLAGS.get(NATION_TO_CODE.get(team, ""), "⚽")
 
-def _resolve_ko_matchup(team1, team2, live_scores):
-    """Return winner info for a knockout matchup (live score overrides model)."""
-    match_data = None
-    reversed_key = False
-    for k in [f"{team1}|{team2}", f"{team2}|{team1}"]:
-        if k in live_scores:
-            match_data = live_scores[k]
-            if k == f"{team2}|{team1}":
-                reversed_key = True
-            break
-            
-    pred_w, adj1, adj2 = knockout_predict(team1, team2)
-    
-    if match_data and match_data.get("ft") is not None:
-        ft = match_data["ft"]
-        et = match_data.get("et")
-        p = match_data.get("p")
+def get_round_of_32_data():
+    """Return the hardcoded Round of 32 matchups list."""
+    return WC_ROUND_OF_32
+
+def get_bracket_data(live_scores):
+    # R32
+    r32 = {}
+    for m in WC_ROUND_OF_32:
+        slot = m["slot"]
+        t1, t2 = m["team1"], m["team2"]
+        s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+        is_finished = (s1 is not None)
         
-        s1_ft, s2_ft = (ft[1], ft[0]) if reversed_key else (ft[0], ft[1])
+        # Check if live
+        now_local = datetime.now(timezone.utc).astimezone()
+        month_name = now_local.strftime("%B")
+        day_val = str(now_local.day)
+        today_str = f"{month_name} {day_val}"
+        is_live = (not is_finished and m["date"] == today_str)
         
-        if p is not None:
-            s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
-            winner = team1 if s1_p > s2_p else team2
-            score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
-        elif et is not None:
-            s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
-            winner = team1 if s1_et > s2_et else team2
-            score_str = f"{s1_et}–{s2_et} AET"
-        else:
-            winner = team1 if s1_ft > s2_ft else team2
-            score_str = f"{s1_ft}–{s2_ft}"
+        winner = None
+        score_str = None
+        
+        if is_finished:
+            match_data = None
+            reversed_key = False
+            for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+                if k in live_scores:
+                    match_data = live_scores[k]
+                    if k == f"{t2}|{t1}":
+                        reversed_key = True
+                    break
+            p = match_data.get("p") if match_data else None
+            et = match_data.get("et") if match_data else None
+            s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
             
-        return {"winner": winner, "is_actual": True, "score": score_str,
-                "adj1": adj1, "adj2": adj2, "pred": pred_w}
+            if p is not None:
+                s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+                winner = t1 if s1_p > s2_p else t2
+                score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+            elif et is not None:
+                s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+                winner = t1 if s1_et > s2_et else t2
+                score_str = f"{s1_et}–{s2_et} AET"
+            else:
+                winner = t1 if s1_ft > s2_ft else t2
+                score_str = f"{s1_ft}–{s2_ft}"
                 
-    return {"winner": pred_w, "is_actual": False, "score": None,
-            "adj1": adj1, "adj2": adj2, "pred": pred_w}
-
-def _build_bracket_winners(live_scores):
-    """Compute winners for R32 through Final using live scores + model."""
-    r32 = {m["slot"]: {**m, **_resolve_ko_matchup(m["team1"], m["team2"], live_scores)}
-           for m in WC_ROUND_OF_32}
-    winners = dict(r32)
-    for stage_id, (a, b) in BRACKET_ADVANCE.items():
-        ta = winners[a]["winner"]
-        tb = winners[b]["winner"]
-        result = _resolve_ko_matchup(ta, tb, live_scores)
-        winners[stage_id] = {"team1": ta, "team2": tb, **result}
-    return winners
-
-def _next_ko_match(live_scores):
-    """Return the next unplayed Round of 32 fixture."""
-    for m in sorted(WC_ROUND_OF_32, key=_parse_ko_date_utc):
-        s1, _, _, _ = get_match_score(m["team1"], m["team2"], live_scores)
-        if s1 is None:
-            return m
-    return None
-
-def _ko_match_card_html(match, live_scores):
-    """Render a Round of 32 matchup card."""
-    t1, t2 = match["team1"], match["team2"]
-    f1, f2 = _ko_flag(t1), _ko_flag(t2)
-    info = _resolve_ko_matchup(t1, t2, live_scores)
-    played_cls = " played" if info["is_actual"] else ""
-    winner = info["winner"]
-    w_pct = info["adj1"] if winner == t1 else info["adj2"]
-
-    if info["is_actual"]:
-        score_main = info["score"]
-        details = ""
-        if " " in info["score"]:
-            score_main, details = info["score"].split(" ", 1)
+        r32[slot] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": is_live,
+            "score_str": score_str,
+            "date": m["date"],
+            "venue": m["venue"],
+            "city": m["city"]
+        }
         
-        score_parts = score_main.split("–")
-        s1_part = score_parts[0]
-        s2_part = score_parts[1] if len(score_parts) > 1 else ""
+    # R16
+    r16_slots = {
+        "R16_1": ("M1", "M4"),
+        "R16_2": ("M2", "M3"),
+        "R16_3": ("M5", "M8"),
+        "R16_4": ("M6", "M7"),
+        "R16_5": ("M9", "M12"),
+        "R16_6": ("M10", "M11"),
+        "R16_7": ("M13", "M16"),
+        "R16_8": ("M14", "M15"),
+    }
+    
+    r16 = {}
+    for slot_id, (feed_a, feed_b) in r16_slots.items():
+        fa, fb = r32[feed_a], r32[feed_b]
+        t1 = fa["winner"] if fa["is_finished"] else None
+        t2 = fb["winner"] if fb["is_finished"] else None
         
-        details_html = f'<div style="font-size:0.9rem;color:#86efac;margin-top:2px;">{details}</div>' if details else ""
+        is_finished = False
+        winner = None
+        score_str = None
+        s1, s2 = None, None
         
-        result_html = (
-            f'<div class="ko-score">{f1} {s1_part} '
-            f'<span style="color:#4b7c4b;">–</span> '
-            f'{s2_part} {f2}</div>'
-            f'{details_html}'
-            f'<div class="ko-badge actual">🏆 {f1 if winner==t1 else f2} {winner} wins</div>'
-        )
-    else:
-        result_html = (
-            f'<div class="ko-badge">Predicted: {f1 if winner==t1 else f2} {winner} {w_pct}%</div>'
-        )
+        if t1 and t2:
+            s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+            is_finished = (s1 is not None)
+            if is_finished:
+                match_data = None
+                reversed_key = False
+                for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+                    if k in live_scores:
+                        match_data = live_scores[k]
+                        if k == f"{t2}|{t1}":
+                            reversed_key = True
+                        break
+                p = match_data.get("p") if match_data else None
+                et = match_data.get("et") if match_data else None
+                s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+                
+                if p is not None:
+                    s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+                    winner = t1 if s1_p > s2_p else t2
+                    score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+                elif et is not None:
+                    s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+                    winner = t1 if s1_et > s2_et else t2
+                    score_str = f"{s1_et}–{s2_et} AET"
+                else:
+                    winner = t1 if s1_ft > s2_ft else t2
+                    score_str = f"{s1_ft}–{s2_ft}"
+                    
+        r16[slot_id] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": False,
+            "score_str": score_str,
+            "label1": f"W-{feed_a}",
+            "label2": f"W-{feed_b}"
+        }
+        
+    # QF
+    qf_slots = {
+        "QF_1": ("R16_1", "R16_2"),
+        "QF_2": ("R16_3", "R16_4"),
+        "QF_3": ("R16_5", "R16_6"),
+        "QF_4": ("R16_7", "R16_8"),
+    }
+    
+    qf = {}
+    for slot_id, (feed_a, feed_b) in qf_slots.items():
+        fa, fb = r16[feed_a], r16[feed_b]
+        t1 = fa["winner"] if fa["is_finished"] else None
+        t2 = fb["winner"] if fb["is_finished"] else None
+        
+        is_finished = False
+        winner = None
+        score_str = None
+        s1, s2 = None, None
+        
+        if t1 and t2:
+            s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+            is_finished = (s1 is not None)
+            if is_finished:
+                match_data = None
+                reversed_key = False
+                for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+                    if k in live_scores:
+                        match_data = live_scores[k]
+                        if k == f"{t2}|{t1}":
+                            reversed_key = True
+                        break
+                p = match_data.get("p") if match_data else None
+                et = match_data.get("et") if match_data else None
+                s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+                
+                if p is not None:
+                    s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+                    winner = t1 if s1_p > s2_p else t2
+                    score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+                elif et is not None:
+                    s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+                    winner = t1 if s1_et > s2_et else t2
+                    score_str = f"{s1_et}–{s2_et} AET"
+                else:
+                    winner = t1 if s1_ft > s2_ft else t2
+                    score_str = f"{s1_ft}–{s2_ft}"
+                    
+        qf[slot_id] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": False,
+            "score_str": score_str,
+            "label1": f"W-{feed_a}",
+            "label2": f"W-{feed_b}"
+        }
+        
+    # SF
+    sf_slots = {
+        "SF_1": ("QF_1", "QF_2"),
+        "SF_2": ("QF_3", "QF_4"),
+    }
+    
+    sf = {}
+    for slot_id, (feed_a, feed_b) in sf_slots.items():
+        fa, fb = qf[feed_a], qf[feed_b]
+        t1 = fa["winner"] if fa["is_finished"] else None
+        t2 = fb["winner"] if fb["is_finished"] else None
+        
+        is_finished = False
+        winner = None
+        score_str = None
+        s1, s2 = None, None
+        
+        if t1 and t2:
+            s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+            is_finished = (s1 is not None)
+            if is_finished:
+                match_data = None
+                reversed_key = False
+                for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+                    if k in live_scores:
+                        match_data = live_scores[k]
+                        if k == f"{t2}|{t1}":
+                            reversed_key = True
+                        break
+                p = match_data.get("p") if match_data else None
+                et = match_data.get("et") if match_data else None
+                s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+                
+                if p is not None:
+                    s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+                    winner = t1 if s1_p > s2_p else t2
+                    score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+                elif et is not None:
+                    s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+                    winner = t1 if s1_et > s2_et else t2
+                    score_str = f"{s1_et}–{s2_et} AET"
+                else:
+                    winner = t1 if s1_ft > s2_ft else t2
+                    score_str = f"{s1_ft}–{s2_ft}"
+                    
+        sf[slot_id] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": False,
+            "score_str": score_str,
+            "label1": f"W-{feed_a}",
+            "label2": f"W-{feed_b}"
+        }
+        
+    # Final
+    fa, fb = sf["SF_1"], sf["SF_2"]
+    t1 = fa["winner"] if fa["is_finished"] else None
+    t2 = fb["winner"] if fb["is_finished"] else None
+    
+    is_finished = False
+    winner = None
+    score_str = None
+    s1, s2 = None, None
+    
+    if t1 and t2:
+        s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+        is_finished = (s1 is not None)
+        if is_finished:
+            match_data = None
+            reversed_key = False
+            for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+                if k in live_scores:
+                    match_data = live_scores[k]
+                    if k == f"{t2}|{t1}":
+                        reversed_key = True
+                    break
+            p = match_data.get("p") if match_data else None
+            et = match_data.get("et") if match_data else None
+            s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+            
+            if p is not None:
+                s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+                winner = t1 if s1_p > s2_p else t2
+                score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+            elif et is not None:
+                s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+                winner = t1 if s1_et > s2_et else t2
+                score_str = f"{s1_et}–{s2_et} AET"
+            else:
+                winner = t1 if s1_ft > s2_ft else t2
+                score_str = f"{s1_ft}–{s2_ft}"
+                
+    final = {
+        "team1": t1,
+        "team2": t2,
+        "score1": s1,
+        "score2": s2,
+        "winner": winner,
+        "is_finished": is_finished,
+        "is_live": False,
+        "score_str": score_str,
+        "label1": "W-SF1",
+        "label2": "W-SF2"
+    }
+    
+    return {
+        "r32": r32,
+        "r16": r16,
+        "qf": qf,
+        "sf": sf,
+        "final": final,
+        "champion": winner if is_finished else None
+    }
 
-    t1_win = "font-weight:800;color:#4ade80;" if winner == t1 and info["is_actual"] else ""
-    t2_win = "font-weight:800;color:#4ade80;" if winner == t2 and info["is_actual"] else ""
+def render_bracket_tree(live_scores):
+    # Fetch data
+    bracket_data = get_bracket_data(live_scores)
+    
+    # CSS Styles for Grid and Connectors
+    st.markdown("""
+<style>
+.bracket-wrapper {
+  overflow-x: auto;
+  padding: 20px 10px;
+  background: #030c03;
+  border-radius: 16px;
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  margin-bottom: 30px;
+}
+.bracket-grid {
+  display: grid;
+  grid-template-columns: 140px 20px 140px 20px 140px 20px 140px 20px 170px 20px 140px 20px 140px 20px 140px 20px 140px;
+  grid-template-rows: repeat(15, 60px);
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+  min-width: 1460px;
+  margin: 0 auto;
+}
+.bracket-box {
+  background: rgba(8, 28, 8, 0.85);
+  border: 1px solid rgba(74, 222, 128, 0.15);
+  border-radius: 8px;
+  padding: 6px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 48px;
+  font-size: 0.78rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+  transition: all 0.2s ease-in-out;
+  box-sizing: border-box;
+}
+.bracket-box:hover {
+  border-color: rgba(74, 222, 128, 0.35);
+  transform: scale(1.02);
+}
+.bracket-box.live {
+  border-color: rgba(239, 68, 68, 0.4);
+  background: rgba(40, 5, 5, 0.8);
+  box-shadow: 0 0 10px rgba(239,68,68,0.15);
+}
+.bracket-box.empty {
+  background: rgba(5, 15, 5, 0.5);
+  border: 1px dashed rgba(74, 222, 128, 0.08);
+}
+.team-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  line-height: 1.3;
+}
+.team-row.placeholder {
+  color: rgba(74, 222, 128, 0.25);
+  font-style: italic;
+  font-size: 0.7rem;
+}
+.team-row.winner {
+  font-weight: 700;
+  color: #f0fdf4;
+}
+.team-row.loser {
+  color: rgba(134, 239, 172, 0.3);
+}
+.bracket-date {
+  font-size: 0.6rem;
+  color: rgba(74, 222, 128, 0.5);
+  text-align: center;
+  margin-top: 2px;
+}
+.pulsing-dot {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.5; }
+  100% { transform: scale(0.9); opacity: 1; }
+}
+.bracket-box.champion-box {
+  background: rgba(251, 191, 36, 0.06);
+  border: 2px solid rgba(251, 191, 36, 0.35);
+  box-shadow: 0 0 16px rgba(251, 191, 36, 0.15);
+}
+.bracket-box.champion-box .team-row {
+  color: #fbbf24;
+  font-weight: 800;
+  font-size: 0.85rem;
+  justify-content: center;
+}
 
-    return clean_html(f'''
-    <div class="ko-card{played_cls}">
-        <div class="ko-slot">{match["slot"]} · Round of 32</div>
-        <div class="ko-teams">
-            <span style="{t1_win}">{f1} {t1}</span>
-            <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
-            <span style="{t2_win}">{f2} {t2}</span>
-        </div>
-        <div class="ko-meta">📅 {match["date"]} · 🏟️ {match["venue"]} · 📍 {match["city"]}</div>
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-            <div class="star-box" style="padding:14px;">
-                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f1} {t1}</div>
-                <div style="font-size:1.6rem;font-weight:800;color:#4ade80;">{info["adj1"]}%</div>
-                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{info["adj1"]}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
-            </div>
-            <div class="star-box" style="padding:14px;">
-                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f2} {t2}</div>
-                <div style="font-size:1.6rem;font-weight:800;color:#4ade80;">{info["adj2"]}%</div>
-                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{info["adj2"]}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
-            </div>
-        </div>
-        {result_html}
-    </div>''')
+/* Connectors */
+.line-cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.line-left-top {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 50%;
+  height: 50%;
+  border-top: 2px solid rgba(74,222,128,0.25);
+  border-right: 2px solid rgba(74,222,128,0.25);
+}
+.line-left-bottom {
+  position: absolute;
+  bottom: 50%;
+  left: 0;
+  width: 50%;
+  height: 50%;
+  border-bottom: 2px solid rgba(74,222,128,0.25);
+  border-right: 2px solid rgba(74,222,128,0.25);
+}
+.line-left-mid {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 0;
+  border-top: 2px solid rgba(74,222,128,0.25);
+}
+.line-left-vert {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  border-left: 2px solid rgba(74,222,128,0.25);
+}
+.line-right-top {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 50%;
+  height: 50%;
+  border-top: 2px solid rgba(74,222,128,0.25);
+  border-left: 2px solid rgba(74,222,128,0.25);
+}
+.line-right-bottom {
+  position: absolute;
+  bottom: 50%;
+  right: 0;
+  width: 50%;
+  height: 50%;
+  border-bottom: 2px solid rgba(74,222,128,0.25);
+  border-left: 2px solid rgba(74,222,128,0.25);
+}
+.line-right-mid {
+  position: absolute;
+  top: 50%;
+  right: 50%;
+  width: 50%;
+  height: 0;
+  border-top: 2px solid rgba(74,222,128,0.25);
+}
+.line-right-vert {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 50%;
+  width: 0;
+  border-right: 2px solid rgba(74,222,128,0.25);
+}
+.line-champion-vert {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid rgba(251,191,36,0.3);
+}
 
-def _bracket_round_html(label, match_ids, winners):
-    """Render a column of bracket matches for a given round."""
-    html = f'<div class="bracket-col"><div class="bracket-round">{label}</div>'
-    for mid in match_ids:
-        w = winners.get(mid, {})
-        if "team1" in w:
-            t1, t2 = w["team1"], w["team2"]
-            win = w.get("winner", t1)
-            s1_cls = "bracket-team winner" if win == t1 else "bracket-team"
-            s2_cls = "bracket-team winner" if win == t2 else "bracket-team"
-            score = f' <span style="color:#4b7c4b;font-size:0.72rem;">({w["score"]})</span>' if w.get("score") else ""
-            pred = f' <span style="color:#fbbf24;font-size:0.68rem;">→ {_ko_flag(win)} {win}</span>'
-            html += f'<div class="bracket-match"><div class="{s1_cls}">{_ko_flag(t1)} {t1}</div><div class="{s2_cls}">{_ko_flag(t2)} {t2}</div>{score}{pred if not w.get("is_actual") else ""}</div>'
-        elif "slot" in w:
-            win = w.get("winner", "?")
-            html += f'<div class="bracket-match"><div class="bracket-team winner">{_ko_flag(win)} {win}</div><div class="bracket-tbd">via {w["slot"]}</div></div>'
+/* Match Cards */
+.ko-card.right-glow {
+  border-color: rgba(74, 222, 128, 0.45) !important;
+  background: rgba(8, 36, 8, 0.95) !important;
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.15);
+}
+.ko-card.wrong-glow {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  background: rgba(24, 8, 8, 0.95) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.1);
+}
+</style>
+""", unsafe_allow_html=True)
+    
+    # Define grid cells
+    grid_cells = {}
+    
+    # Left Side Matches
+    grid_cells[(1, 1)] = ("match", "r32", "M1")
+    grid_cells[(1, 3)] = ("match", "r32", "M4")
+    grid_cells[(1, 5)] = ("match", "r32", "M2")
+    grid_cells[(1, 7)] = ("match", "r32", "M3")
+    grid_cells[(1, 9)] = ("match", "r32", "M5")
+    grid_cells[(1, 11)] = ("match", "r32", "M8")
+    grid_cells[(1, 13)] = ("match", "r32", "M6")
+    grid_cells[(1, 15)] = ("match", "r32", "M7")
+    
+    grid_cells[(3, 2)] = ("match", "r16", "R16_1")
+    grid_cells[(3, 6)] = ("match", "r16", "R16_2")
+    grid_cells[(3, 10)] = ("match", "r16", "R16_3")
+    grid_cells[(3, 14)] = ("match", "r16", "R16_4")
+    
+    grid_cells[(5, 4)] = ("match", "qf", "QF_1")
+    grid_cells[(5, 12)] = ("match", "qf", "QF_2")
+    
+    grid_cells[(7, 8)] = ("match", "sf", "SF_1")
+    
+    # Center Matches
+    grid_cells[(9, 8)] = ("match", "final", "FINAL")
+    grid_cells[(9, 6)] = ("champion", None, None)
+    
+    # Right Side Matches
+    grid_cells[(11, 8)] = ("match", "sf", "SF_2")
+    
+    grid_cells[(13, 4)] = ("match", "qf", "QF_3")
+    grid_cells[(13, 12)] = ("match", "qf", "QF_4")
+    
+    grid_cells[(15, 2)] = ("match", "r16", "R16_5")
+    grid_cells[(15, 6)] = ("match", "r16", "R16_6")
+    grid_cells[(15, 10)] = ("match", "r16", "R16_7")
+    grid_cells[(15, 14)] = ("match", "r16", "R16_8")
+    
+    grid_cells[(17, 1)] = ("match", "r32", "M9")
+    grid_cells[(17, 3)] = ("match", "r32", "M12")
+    grid_cells[(17, 5)] = ("match", "r32", "M10")
+    grid_cells[(17, 7)] = ("match", "r32", "M11")
+    grid_cells[(17, 9)] = ("match", "r32", "M13")
+    grid_cells[(17, 11)] = ("match", "r32", "M16")
+    grid_cells[(17, 13)] = ("match", "r32", "M14")
+    grid_cells[(17, 15)] = ("match", "r32", "M15")
+    
+    # Left Connectors
+    # Col 2
+    grid_cells[(2, 1)] = ("line-left-top", None, None)
+    grid_cells[(2, 2)] = ("line-left-join", None, None)
+    grid_cells[(2, 3)] = ("line-left-bottom", None, None)
+    grid_cells[(2, 5)] = ("line-left-top", None, None)
+    grid_cells[(2, 6)] = ("line-left-join", None, None)
+    grid_cells[(2, 7)] = ("line-left-bottom", None, None)
+    grid_cells[(2, 9)] = ("line-left-top", None, None)
+    grid_cells[(2, 10)] = ("line-left-join", None, None)
+    grid_cells[(2, 11)] = ("line-left-bottom", None, None)
+    grid_cells[(2, 13)] = ("line-left-top", None, None)
+    grid_cells[(2, 14)] = ("line-left-join", None, None)
+    grid_cells[(2, 15)] = ("line-left-bottom", None, None)
+    
+    # Col 4
+    grid_cells[(4, 2)] = ("line-left-top", None, None)
+    grid_cells[(4, 3)] = ("line-left-vert", None, None)
+    grid_cells[(4, 4)] = ("line-left-join", None, None)
+    grid_cells[(4, 5)] = ("line-left-vert", None, None)
+    grid_cells[(4, 6)] = ("line-left-bottom", None, None)
+    grid_cells[(4, 10)] = ("line-left-top", None, None)
+    grid_cells[(4, 11)] = ("line-left-vert", None, None)
+    grid_cells[(4, 12)] = ("line-left-join", None, None)
+    grid_cells[(4, 13)] = ("line-left-vert", None, None)
+    grid_cells[(4, 14)] = ("line-left-bottom", None, None)
+    
+    # Col 6
+    grid_cells[(6, 4)] = ("line-left-top", None, None)
+    for r in [5, 6, 7]: grid_cells[(6, r)] = ("line-left-vert", None, None)
+    grid_cells[(6, 8)] = ("line-left-join", None, None)
+    for r in [9, 10, 11]: grid_cells[(6, r)] = ("line-left-vert", None, None)
+    grid_cells[(6, 12)] = ("line-left-bottom", None, None)
+    
+    # Col 8
+    grid_cells[(8, 8)] = ("line-left-mid", None, None)
+    
+    # Col 9 vertical line between Final and Champion
+    grid_cells[(9, 7)] = ("line-champion-vert", None, None)
+    
+    # Col 10
+    grid_cells[(10, 8)] = ("line-right-mid", None, None)
+    
+    # Right Connectors
+    # Col 12
+    grid_cells[(12, 4)] = ("line-right-top", None, None)
+    for r in [5, 6, 7]: grid_cells[(12, r)] = ("line-right-vert", None, None)
+    grid_cells[(12, 8)] = ("line-right-join", None, None)
+    for r in [9, 10, 11]: grid_cells[(12, r)] = ("line-right-vert", None, None)
+    grid_cells[(12, 12)] = ("line-right-bottom", None, None)
+    
+    # Col 14
+    grid_cells[(14, 2)] = ("line-right-top", None, None)
+    grid_cells[(14, 3)] = ("line-right-vert", None, None)
+    grid_cells[(14, 4)] = ("line-right-join", None, None)
+    grid_cells[(14, 5)] = ("line-right-vert", None, None)
+    grid_cells[(14, 6)] = ("line-right-bottom", None, None)
+    grid_cells[(14, 10)] = ("line-right-top", None, None)
+    grid_cells[(14, 11)] = ("line-right-vert", None, None)
+    grid_cells[(14, 12)] = ("line-right-join", None, None)
+    grid_cells[(14, 13)] = ("line-right-vert", None, None)
+    grid_cells[(14, 14)] = ("line-right-bottom", None, None)
+    
+    # Col 16
+    grid_cells[(16, 1)] = ("line-right-top", None, None)
+    grid_cells[(16, 2)] = ("line-right-join", None, None)
+    grid_cells[(16, 3)] = ("line-right-bottom", None, None)
+    grid_cells[(16, 5)] = ("line-right-top", None, None)
+    grid_cells[(16, 6)] = ("line-right-join", None, None)
+    grid_cells[(16, 7)] = ("line-right-bottom", None, None)
+    grid_cells[(16, 9)] = ("line-right-top", None, None)
+    grid_cells[(16, 10)] = ("line-right-join", None, None)
+    grid_cells[(16, 11)] = ("line-right-bottom", None, None)
+    grid_cells[(16, 13)] = ("line-right-top", None, None)
+    grid_cells[(16, 14)] = ("line-right-join", None, None)
+    grid_cells[(16, 15)] = ("line-right-bottom", None, None)
+    
+    # Build HTML
+    html = []
+    html.append('<div class="bracket-wrapper">')
+    html.append('<div class="bracket-grid">')
+    
+    for (col, row), cell_info in grid_cells.items():
+        cell_type, round_name, slot_id = cell_info
+        
+        if cell_type == "match":
+            match_data = bracket_data[round_name][slot_id]
+            t1, t2 = match_data["team1"], match_data["team2"]
+            s1, s2 = match_data["score1"], match_data["score2"]
+            winner = match_data["winner"]
+            is_finished = match_data["is_finished"]
+            is_live = match_data["is_live"]
+            
+            box_class = "bracket-box"
+            if is_live:
+                box_class += " live"
+            
+            if t1 is None:
+                t1_html = f'<div class="team-row placeholder">{match_data.get("label1", "TBD")}</div>'
+                t2_html = f'<div class="team-row placeholder">{match_data.get("label2", "TBD")}</div>'
+                box_class += " empty"
+                date_html = ""
+            else:
+                flag1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
+                flag2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
+                
+                t1_cls = "team-row"
+                t2_cls = "team-row"
+                s1_h = ""
+                s2_h = ""
+                
+                if is_finished:
+                    if winner == t1:
+                        t1_cls += " winner"
+                        t2_cls += " loser"
+                    elif winner == t2:
+                        t1_cls += " loser"
+                        t2_cls += " winner"
+                    s1_h = f"<b>{s1}</b>"
+                    s2_h = f"<b>{s2}</b>"
+                elif is_live:
+                    s1_h = f"<b>{s1 if s1 is not None else 0}</b>"
+                    s2_h = f"<b>{s2 if s2 is not None else 0}</b>"
+                
+                t1_disp = f'{flag1} <span style="display: inline-block; max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t1}</span>'
+                t2_disp = f'{flag2} <span style="display: inline-block; max-width: 90px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t2}</span>'
+                
+                t1_html = f'<div class="{t1_cls}">{t1_disp} {s1_h}</div>'
+                t2_html = f'<div class="{t2_cls}">{t2_disp} {s2_h}</div>'
+                
+                date_val = match_data.get("date", "")
+                if round_name == "r32" and date_val:
+                    date_html = f'<div class="bracket-date">{date_val}</div>'
+                else:
+                    date_html = ""
+            
+            live_dot = ' <span class="pulsing-dot"></span>' if is_live else ""
+            slot_label = f'<div style="font-size:0.5rem;color:rgba(74,222,128,0.4);font-weight:700;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;"><span>{slot_id}</span>{live_dot}</div>'
+            
+            html.append(f'<div class="{box_class}" style="grid-column: {col}; grid-row: {row};">')
+            html.append(slot_label)
+            html.append(t1_html)
+            html.append(t2_html)
+            html.append(date_html)
+            html.append('</div>')
+            
+        elif cell_type == "champion":
+            champ = bracket_data["champion"]
+            if champ:
+                flag = FLAGS.get(NATION_TO_CODE.get(champ, ""), "⚽")
+                html.append(f'''<div class="bracket-box champion-box" style="grid-column: {col}; grid-row: {row};">
+                    <div style="font-size:0.55rem;color:#fbbf24;text-transform:uppercase;letter-spacing:0.1em;text-align:center;font-weight:700;margin-bottom:2px;">🏆 CHAMPION 🏆</div>
+                    <div class="team-row" style="color:#fbbf24;font-weight:800;font-size:0.85rem;justify-content:center;">
+                        {flag} &nbsp; {champ}
+                    </div>
+                </div>''')
+            else:
+                html.append(f'''<div class="bracket-box champion-box empty" style="grid-column: {col}; grid-row: {row}; border: 1px dashed rgba(251, 191, 36, 0.2); background: rgba(251,191,36,0.02);">
+                    <div style="font-size:0.55rem;color:rgba(251,191,36,0.5);text-transform:uppercase;letter-spacing:0.1em;text-align:center;font-weight:700;margin-bottom:2px;">🏆 CHAMPION 🏆</div>
+                    <div class="team-row placeholder" style="color:rgba(251,191,36,0.4);font-size:0.75rem;justify-content:center;font-style:italic;">
+                        TBD
+                    </div>
+                </div>''')
+                
+        elif cell_type.startswith("line-"):
+            inner_class = cell_type
+            html.append(f'<div style="grid-column: {col}; grid-row: {row}; width:100%; height:100%;">')
+            html.append('<div class="line-cell">')
+            
+            if cell_type == "line-left-join":
+                html.append('<div class="line-left-vert"></div><div class="line-left-mid"></div>')
+            elif cell_type == "line-right-join":
+                html.append('<div class="line-right-vert"></div><div class="line-right-mid"></div>')
+            else:
+                html.append(f'<div class="{inner_class}"></div>')
+                
+            html.append('</div>')
+            html.append('</div>')
+            
+    html.append('</div>')
+    html.append('</div>')
+    
+    st.markdown("".join(html), unsafe_allow_html=True)
+
+def render_match_cards(live_scores):
+    st.markdown("### ⚔️ Round of 32 — All 16 Matches")
+    st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">Detailed model predictions and actual knockout results</p>', unsafe_allow_html=True)
+    
+    cols = st.columns(2)
+    for idx, match in enumerate(WC_ROUND_OF_32):
+        t1, t2 = match["team1"], match["team2"]
+        f1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
+        f2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
+        
+        pred_w, adj1, adj2 = knockout_predict(t1, t2)
+        wpct = adj1 if pred_w == t1 else adj2
+        
+        s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+        is_finished = (s1 is not None)
+        
+        if is_finished:
+            match_data = None
+            reversed_key = False
+            for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+                if k in live_scores:
+                    match_data = live_scores[k]
+                    if k == f"{t2}|{t1}":
+                        reversed_key = True
+                    break
+            p = match_data.get("p") if match_data else None
+            et = match_data.get("et") if match_data else None
+            s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+            
+            if p is not None:
+                s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+                act_winner = t1 if s1_p > s2_p else t2
+                score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+            elif et is not None:
+                s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+                act_winner = t1 if s1_et > s2_et else t2
+                score_str = f"{s1_et}–{s2_et} AET"
+            else:
+                act_winner = t1 if s1_ft > s2_ft else t2
+                score_str = f"{s1_ft}–{s2_ft}"
+                
+            is_correct = (act_winner == pred_w)
+            glow_class = "right-glow" if is_correct else "wrong-glow"
+            badge_html = f'<div class="ko-badge actual">{"✅ Right Prediction" if is_correct else "❌ Wrong Prediction"}</div>'
+            
+            score_main = score_str
+            details = ""
+            if " " in score_str:
+                score_main, details = score_str.split(" ", 1)
+            score_parts = score_main.split("–")
+            s1_part = score_parts[0]
+            s2_part = score_parts[1] if len(score_parts) > 1 else ""
+            details_html = f'<div style="font-size:0.9rem;color:#86efac;margin-top:2px;">{details}</div>' if details else ""
+            
+            score_html = (
+                f'<div class="ko-score" style="margin-bottom:8px;">{f1} {s1_part} '
+                f'<span style="color:#4b7c4b;">–</span> '
+                f'{s2_part} {f2}</div>'
+                f'{details_html}'
+            )
         else:
-            html += '<div class="bracket-match"><div class="bracket-tbd">TBD</div></div>'
-    html += '</div>'
-    return html
+            glow_class = ""
+            badge_html = f'<div class="ko-badge">Predicted: {f1 if pred_w==t1 else f2} {pred_w} {wpct}%</div>'
+            score_html = ""
+            
+        t1_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t1 else ""
+        t2_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t2 else ""
+        
+        card_html = clean_html(f'''
+        <div class="ko-card {glow_class}">
+            <div class="ko-slot">{match["slot"]} · Round of 32</div>
+            <div class="ko-teams">
+                <span style="{t1_bold}">{f1} {t1}</span>
+                <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
+                <span style="{t2_bold}">{f2} {t2}</span>
+            </div>
+            <div class="ko-meta">📅 {match["date"]} · 🏟️ {match["venue"]} · 📍 {match["city"]}</div>
+            
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+                <div class="star-box" style="padding:10px 14px;">
+                    <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f1} {t1}</div>
+                    <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj1}%</div>
+                    <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj1}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+                </div>
+                <div class="star-box" style="padding:10px 14px;">
+                    <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f2} {t2}</div>
+                    <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj2}%</div>
+                    <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj2}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+                </div>
+            </div>
+            {score_html}
+            {badge_html}
+        </div>''')
+        
+        with cols[idx % 2]:
+            st.markdown(card_html, unsafe_allow_html=True)
 
 def get_squad(team):
     code = NATION_TO_CODE.get(team,"")
@@ -743,11 +1435,11 @@ def get_squad(team):
     return df[df["Nation"]==code].sort_values("Overall_Index",ascending=False)
 
 # ── HORIZONTAL TAB NAVIGATION ─────────────────────────────────────────────
-tab_mi, tab_sched, tab_ko, tab_nat = st.tabs([
+tab_mi, tab_sched, tab_nat, tab_bracket = st.tabs([
     "🔥 Match Intelligence",
     "📅 Schedule",
-    "🏆 Knockout Bracket",
     "🌍 Nations & Players",
+    "🏆 Knockout Bracket",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -1041,15 +1733,14 @@ with tab_sched:
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 3 — KNOCKOUT BRACKET
 # ════════════════════════════════════════════════════════════════════════════
-with tab_ko:
+with tab_bracket:
     st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
-    st.markdown('<p class="page-sub">Round of 32 through the Final · Model predictions via scouting + FIFA rankings · Live scores override when available</p>', unsafe_allow_html=True)
-
+    st.markdown('<p class="page-sub">Follow the visual bracket tree and explore predicted matchups vs actual results.</p>', unsafe_allow_html=True)
+    
     ko_live = fetch_live_scores()
-    ko_winners = _build_bracket_winners(ko_live)
     next_ko = _next_ko_match(ko_live)
-
-    # ── Next Up hero ──────────────────────────────────────────────────────
+    
+    # Next Up hero countdown
     if next_ko:
         nk_t1, nk_t2 = next_ko["team1"], next_ko["team2"]
         nk_f1, nk_f2 = _ko_flag(nk_t1), _ko_flag(nk_t2)
@@ -1093,40 +1784,11 @@ with tab_ko:
         letter-spacing:0.22em;font-weight:700;margin-bottom:8px;">Round of 32 Complete</div>
         <div style="font-size:1.2rem;font-weight:800;color:#f0fdf4;">All Round of 32 matches played — follow the bracket below</div>
         </div>'''), unsafe_allow_html=True)
-
-    # ── Bracket progression (R16 → Final) ─────────────────────────────────
-    st.markdown("### 🗺️ Bracket Path")
-    bc1, bc2, bc3, bc4, bc5 = st.columns(5)
-    with bc1:
-        st.markdown(_bracket_round_html("Round of 16", list(BRACKET_ADVANCE.keys())[:8], ko_winners), unsafe_allow_html=True)
-    with bc2:
-        st.markdown(_bracket_round_html("Quarter-Finals", ["QF_1","QF_2","QF_3","QF_4"], ko_winners), unsafe_allow_html=True)
-    with bc3:
-        st.markdown(_bracket_round_html("Semi-Finals", ["SF_1","SF_2"], ko_winners), unsafe_allow_html=True)
-    with bc4:
-        st.markdown(_bracket_round_html("Final", ["FINAL"], ko_winners), unsafe_allow_html=True)
-    with bc5:
-        champ = ko_winners.get("FINAL", {}).get("winner", "TBD")
-        st.markdown(clean_html(f'''
-        <div class="bracket-col" style="text-align:center;padding:24px 14px;">
-            <div class="bracket-round">Champion</div>
-            <div style="font-size:2.5rem;margin:12px 0;">🏆</div>
-            <div style="font-size:1.3rem;font-weight:900;color:#fbbf24;">{_ko_flag(champ)} {champ}</div>
-            <div style="font-size:0.72rem;color:#86efac;margin-top:8px;">Predicted winner</div>
-        </div>'''), unsafe_allow_html=True)
-
-    # ── Round of 32 match cards ───────────────────────────────────────────
-    st.markdown("### ⚔️ Round of 32 — All 16 Matches")
-    st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">June 28 – July 3 · Live scores override predictions when full-time results are available</p>', unsafe_allow_html=True)
-
-    ko_dates = sorted(set(m["date"] for m in WC_ROUND_OF_32), key=lambda d: _KO_DATE_ORDER.get(d, 99))
-    for ko_date in ko_dates:
-        day_matches = [m for m in WC_ROUND_OF_32 if m["date"] == ko_date]
-        st.markdown(f"#### 📅 {ko_date}")
-        cols = st.columns(2)
-        for idx, m in enumerate(day_matches):
-            with cols[idx % 2]:
-                st.markdown(_ko_match_card_html(m, ko_live), unsafe_allow_html=True)
+        
+    st.markdown("### 🗺️ Visual Bracket Tree")
+    render_bracket_tree(ko_live)
+    
+    render_match_cards(ko_live)
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 4 — WC WATCHLIST
