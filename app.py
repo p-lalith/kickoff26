@@ -898,7 +898,7 @@ def get_bracket_data(live_scores):
         "r16": r16,
         "qf": qf,
         "sf": sf,
-        "final": final,
+        "final": {"FINAL": final},
         "champion": winner if is_finished else None
     }
 
