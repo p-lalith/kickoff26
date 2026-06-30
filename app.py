@@ -1308,13 +1308,18 @@ def render_bracket_tree(live_scores):
                     date_html = ""
             
             live_dot = ' <span class="pulsing-dot"></span>' if is_live else ""
-            _slot_display = {
-                "r32": slot_id,
-                "r16": f"R16 · {slot_id.split('_')[1]}",
-                "qf": f"QF {slot_id.split('_')[1]}",
-                "sf": f"SF {slot_id.split('_')[1]}",
-                "final": "FINAL",
-            }.get(round_name, slot_id)
+            if round_name == "r32":
+                _slot_display = slot_id
+            elif round_name == "r16":
+                _slot_display = f"R16 · {slot_id.split('_')[1]}"
+            elif round_name == "qf":
+                _slot_display = f"QF {slot_id.split('_')[1]}"
+            elif round_name == "sf":
+                _slot_display = f"SF {slot_id.split('_')[1]}"
+            elif round_name == "final":
+                _slot_display = "FINAL"
+            else:
+                _slot_display = slot_id
             slot_label = f'<div style="font-size:0.5rem;color:rgba(74,222,128,0.4);font-weight:700;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;letter-spacing:0.04em;text-transform:uppercase;"><span>{_slot_display}</span>{live_dot}</div>'
             
             html.append(f'<div class="{box_class}" style="grid-column: {col}; grid-row: {row};">')
