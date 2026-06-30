@@ -30,16 +30,9 @@ API_NAME_MAP = {
     "USA": "United States",
     "DR Congo": "Congo DR",
     "Turkey": "Turkiye",
-}
-
-
-API_NAME_MAP = {
-    "Czech Republic": "Czechia",
-    "Bosnia & Herzegovina": "Bosnia-Herzegovina",
-    "USA": "United States",
-    "DR Congo": "Congo DR",
-    "Turkey": "Turkiye",
     "Curacao": "Curacao",
+    "Côte d'Ivoire": "Ivory Coast",
+    "Cabo Verde": "Cape Verde",
 }
 
 @st.cache_data(ttl=300)
@@ -233,7 +226,43 @@ WC_SCHEDULE = [
     {"group":"L","team1":"Panama","team2":"England","date":"Jun 27","time":"5:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
     {"group":"L","team1":"Croatia","team2":"Ghana","date":"Jun 27","time":"5:00 PM ET","venue":"Lincoln Financial Field","city":"Philadelphia"},
 ]
-# 
+
+# ── ROUND OF 32 (locked tournament bracket) ─────────────────────────────────
+WC_ROUND_OF_32 = [
+    {"slot":"M1","team1":"South Africa","team2":"Canada","date":"June 28","venue":"SoFi Stadium","city":"Inglewood"},
+    {"slot":"M2","team1":"Brazil","team2":"Japan","date":"June 29","venue":"NRG Stadium","city":"Houston"},
+    {"slot":"M3","team1":"Germany","team2":"Paraguay","date":"June 29","venue":"Gillette Stadium","city":"Foxborough"},
+    {"slot":"M4","team1":"Netherlands","team2":"Morocco","date":"June 29","venue":"Estadio Monterrey","city":"Monterrey"},
+    {"slot":"M5","team1":"Ivory Coast","team2":"Norway","date":"June 30","venue":"AT&T Stadium","city":"Arlington"},
+    {"slot":"M6","team1":"France","team2":"Sweden","date":"June 30","venue":"MetLife Stadium","city":"East Rutherford"},
+    {"slot":"M7","team1":"Mexico","team2":"Ecuador","date":"June 30","venue":"Estadio Azteca","city":"Mexico City"},
+    {"slot":"M8","team1":"England","team2":"Congo DR","date":"July 1","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"slot":"M9","team1":"Belgium","team2":"Senegal","date":"July 1","venue":"Lumen Field","city":"Seattle"},
+    {"slot":"M10","team1":"United States","team2":"Bosnia-Herzegovina","date":"July 1","venue":"Levi's Stadium","city":"Santa Clara"},
+    {"slot":"M11","team1":"Spain","team2":"Austria","date":"July 2","venue":"SoFi Stadium","city":"Inglewood"},
+    {"slot":"M12","team1":"Switzerland","team2":"Algeria","date":"July 2","venue":"Vancouver Stadium","city":"Vancouver"},
+    {"slot":"M13","team1":"Portugal","team2":"Croatia","date":"July 2","venue":"Toronto Stadium","city":"Toronto"},
+    {"slot":"M14","team1":"Australia","team2":"Egypt","date":"July 3","venue":"AT&T Stadium","city":"Arlington"},
+    {"slot":"M15","team1":"Argentina","team2":"Cape Verde","date":"July 3","venue":"Hard Rock Stadium","city":"Miami Gardens"},
+    {"slot":"M16","team1":"Colombia","team2":"Ghana","date":"July 3","venue":"Arrowhead Stadium","city":"Kansas City"},
+]
+
+ROUND_OF_16_PAIRS = [
+    ("M1","M4"), ("M2","M3"), ("M5","M8"), ("M6","M7"),
+    ("M9","M12"), ("M10","M11"), ("M13","M16"), ("M14","M15"),
+]
+
+# R16 → QF → SF → Final adjacency (Half 1 = M1–M8, Half 2 = M9–M16)
+BRACKET_ADVANCE = {
+    "R16_1": ("M1","M4"), "R16_2": ("M2","M3"),
+    "R16_3": ("M5","M8"), "R16_4": ("M6","M7"),
+    "R16_5": ("M9","M12"), "R16_6": ("M10","M11"),
+    "R16_7": ("M13","M16"), "R16_8": ("M14","M15"),
+    "QF_1": ("R16_1","R16_2"), "QF_2": ("R16_3","R16_4"),
+    "QF_3": ("R16_5","R16_6"), "QF_4": ("R16_7","R16_8"),
+    "SF_1": ("QF_1","QF_2"), "SF_2": ("QF_3","QF_4"),
+    "FINAL": ("SF_1","SF_2"),
+}
 
 
 # ── HEAD TO HEAD HISTORY ──────────────────────────────────────────────────
@@ -341,6 +370,23 @@ section[data-testid="stSidebar"]{display:none;}
 .ctable{width:100%;border-collapse:collapse;margin-top:16px;background:rgba(5,18,5,0.6);border-radius:12px;border:1px solid rgba(74,222,128,0.1);overflow:hidden;}
 .ctable th{padding:12px 16px;color:#86efac;font-weight:600;text-align:left;background:rgba(8,32,8,0.8);border-bottom:2px solid rgba(74,222,128,0.15);}
 .ctable td{padding:10px 16px;border-bottom:1px solid rgba(74,222,128,0.05);color:#dcfce7;}
+
+/* Knockout bracket */
+.ko-card{background:rgba(8,28,8,0.85);border:1px solid rgba(74,222,128,0.15);border-radius:14px;padding:18px 20px;margin-bottom:12px;transition:all 0.25s;}
+.ko-card:hover{border-color:rgba(74,222,128,0.3);transform:translateY(-2px);}
+.ko-card.played{border-color:rgba(74,222,128,0.35);background:rgba(8,32,8,0.95);}
+.ko-slot{font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.12em;font-weight:700;margin-bottom:8px;}
+.ko-teams{font-size:1rem;font-weight:700;color:#f0fdf4;margin-bottom:10px;line-height:1.5;}
+.ko-meta{font-size:0.75rem;color:#86efac;opacity:0.75;margin-bottom:12px;}
+.ko-badge{display:inline-block;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;padding:4px 12px;border-radius:9999px;font-size:0.78rem;font-weight:700;margin-top:6px;}
+.ko-badge.actual{background:rgba(74,222,128,0.12);border-color:rgba(74,222,128,0.35);color:#4ade80;}
+.ko-score{font-size:1.4rem;font-weight:900;color:#f0fdf4;margin:8px 0;}
+.bracket-col{background:rgba(5,18,5,0.5);border:1px solid rgba(74,222,128,0.08);border-radius:14px;padding:14px;margin-bottom:12px;}
+.bracket-round{font-size:0.72rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:10px;text-align:center;}
+.bracket-match{background:rgba(8,28,8,0.7);border:1px solid rgba(74,222,128,0.1);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:0.82rem;}
+.bracket-team{color:#f0fdf4;font-weight:600;}
+.bracket-team.winner{color:#4ade80;}
+.bracket-tbd{color:#4b7c4b;font-style:italic;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -521,15 +567,148 @@ def win_probability(team1, team2):
     p2 = raw2 * (1 - draw_prob)
     return round(p1*100,1), round(draw_prob*100,1), round(p2*100,1)
 
+def knockout_predict(team1, team2):
+    """Knockout win% — redistributes draw probability proportionally."""
+    wp1, wpd, wp2 = win_probability(team1, team2)
+    total = wp1 + wp2
+    adj1 = wp1 + wpd * (wp1/total if total>0 else 0.5)
+    adj2 = wp2 + wpd * (wp2/total if total>0 else 0.5)
+    predicted_winner = team1 if adj1 >= adj2 else team2
+    return predicted_winner, round(adj1, 1), round(adj2, 1)
+
+_KO_DATE_ORDER = {
+    "June 28": 0, "June 29": 1, "June 30": 2,
+    "July 1": 3, "July 2": 4, "July 3": 5,
+}
+
+def _parse_ko_date_utc(match):
+    """Parse knockout date like 'June 28' to UTC midnight (sort key)."""
+    try:
+        parts = match["date"].split()
+        mon = _MONTH_MAP.get(parts[0][:3], 6)
+        day = int(parts[1])
+        return datetime(2026, mon, day, 20, 0, 0, tzinfo=timezone.utc)
+    except Exception:
+        return datetime(2099, 1, 1, tzinfo=timezone.utc)
+
+def _ko_flag(team):
+    return FLAGS.get(NATION_TO_CODE.get(team, ""), "⚽")
+
+def _resolve_ko_matchup(team1, team2, live_scores):
+    """Return winner info for a knockout matchup (live score overrides model)."""
+    s1, s2, _, _ = get_match_score(team1, team2, live_scores)
+    pred_w, adj1, adj2 = knockout_predict(team1, team2)
+    if s1 is not None:
+        if s1 > s2:
+            winner = team1
+        elif s2 > s1:
+            winner = team2
+        else:
+            winner = pred_w
+        return {"winner": winner, "is_actual": True, "score": f"{s1}–{s2}",
+                "adj1": adj1, "adj2": adj2, "pred": pred_w}
+    return {"winner": pred_w, "is_actual": False, "score": None,
+            "adj1": adj1, "adj2": adj2, "pred": pred_w}
+
+def _build_bracket_winners(live_scores):
+    """Compute winners for R32 through Final using live scores + model."""
+    r32 = {m["slot"]: {**m, **_resolve_ko_matchup(m["team1"], m["team2"], live_scores)}
+           for m in WC_ROUND_OF_32}
+    winners = dict(r32)
+    for stage_id, (a, b) in BRACKET_ADVANCE.items():
+        ta = winners[a]["winner"]
+        tb = winners[b]["winner"]
+        result = _resolve_ko_matchup(ta, tb, live_scores)
+        winners[stage_id] = {"team1": ta, "team2": tb, **result}
+    return winners
+
+def _next_ko_match(live_scores):
+    """Return the next unplayed Round of 32 fixture."""
+    for m in sorted(WC_ROUND_OF_32, key=_parse_ko_date_utc):
+        s1, _, _, _ = get_match_score(m["team1"], m["team2"], live_scores)
+        if s1 is None:
+            return m
+    return None
+
+def _ko_match_card_html(match, live_scores):
+    """Render a Round of 32 matchup card."""
+    t1, t2 = match["team1"], match["team2"]
+    f1, f2 = _ko_flag(t1), _ko_flag(t2)
+    info = _resolve_ko_matchup(t1, t2, live_scores)
+    played_cls = " played" if info["is_actual"] else ""
+    winner = info["winner"]
+    w_pct = info["adj1"] if winner == t1 else info["adj2"]
+
+    if info["is_actual"]:
+        result_html = (
+            f'<div class="ko-score">{f1} {info["score"].split("–")[0]} '
+            f'<span style="color:#4b7c4b;">–</span> '
+            f'{info["score"].split("–")[1]} {f2}</div>'
+            f'<div class="ko-badge actual">🏆 {f1 if winner==t1 else f2} {winner} wins</div>'
+        )
+    else:
+        result_html = (
+            f'<div class="ko-badge">Predicted: {f1 if winner==t1 else f2} {winner} {w_pct}%</div>'
+        )
+
+    t1_win = "font-weight:800;color:#4ade80;" if winner == t1 and info["is_actual"] else ""
+    t2_win = "font-weight:800;color:#4ade80;" if winner == t2 and info["is_actual"] else ""
+
+    return clean_html(f'''
+    <div class="ko-card{played_cls}">
+        <div class="ko-slot">{match["slot"]} · Round of 32</div>
+        <div class="ko-teams">
+            <span style="{t1_win}">{f1} {t1}</span>
+            <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
+            <span style="{t2_win}">{f2} {t2}</span>
+        </div>
+        <div class="ko-meta">📅 {match["date"]} · 🏟️ {match["venue"]} · 📍 {match["city"]}</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+            <div class="star-box" style="padding:14px;">
+                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f1} {t1}</div>
+                <div style="font-size:1.6rem;font-weight:800;color:#4ade80;">{info["adj1"]}%</div>
+                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{info["adj1"]}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+            </div>
+            <div class="star-box" style="padding:14px;">
+                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f2} {t2}</div>
+                <div style="font-size:1.6rem;font-weight:800;color:#4ade80;">{info["adj2"]}%</div>
+                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{info["adj2"]}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+            </div>
+        </div>
+        {result_html}
+    </div>''')
+
+def _bracket_round_html(label, match_ids, winners):
+    """Render a column of bracket matches for a given round."""
+    html = f'<div class="bracket-col"><div class="bracket-round">{label}</div>'
+    for mid in match_ids:
+        w = winners.get(mid, {})
+        if "team1" in w:
+            t1, t2 = w["team1"], w["team2"]
+            win = w.get("winner", t1)
+            s1_cls = "bracket-team winner" if win == t1 else "bracket-team"
+            s2_cls = "bracket-team winner" if win == t2 else "bracket-team"
+            score = f' <span style="color:#4b7c4b;font-size:0.72rem;">({w["score"]})</span>' if w.get("score") else ""
+            pred = f' <span style="color:#fbbf24;font-size:0.68rem;">→ {_ko_flag(win)} {win}</span>'
+            html += f'<div class="bracket-match"><div class="{s1_cls}">{_ko_flag(t1)} {t1}</div><div class="{s2_cls}">{_ko_flag(t2)} {t2}</div>{score}{pred if not w.get("is_actual") else ""}</div>'
+        elif "slot" in w:
+            win = w.get("winner", "?")
+            html += f'<div class="bracket-match"><div class="bracket-team winner">{_ko_flag(win)} {win}</div><div class="bracket-tbd">via {w["slot"]}</div></div>'
+        else:
+            html += '<div class="bracket-match"><div class="bracket-tbd">TBD</div></div>'
+    html += '</div>'
+    return html
+
 def get_squad(team):
     code = NATION_TO_CODE.get(team,"")
     if not code: return pd.DataFrame()
     return df[df["Nation"]==code].sort_values("Overall_Index",ascending=False)
 
 # ── HORIZONTAL TAB NAVIGATION ─────────────────────────────────────────────
-tab_mi, tab_sched, tab_nat = st.tabs([
+tab_mi, tab_sched, tab_ko, tab_nat = st.tabs([
     "🔥 Match Intelligence",
     "📅 Schedule",
+    "🏆 Knockout Bracket",
     "🌍 Nations & Players",
 ])
 
@@ -822,7 +1001,97 @@ with tab_sched:
         st.markdown(clean_html(html),unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 3 — WC WATCHLIST
+# TAB 3 — KNOCKOUT BRACKET
+# ════════════════════════════════════════════════════════════════════════════
+with tab_ko:
+    st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
+    st.markdown('<p class="page-sub">Round of 32 through the Final · Model predictions via scouting + FIFA rankings · Live scores override when available</p>', unsafe_allow_html=True)
+
+    ko_live = fetch_live_scores()
+    ko_winners = _build_bracket_winners(ko_live)
+    next_ko = _next_ko_match(ko_live)
+
+    # ── Next Up hero ──────────────────────────────────────────────────────
+    if next_ko:
+        nk_t1, nk_t2 = next_ko["team1"], next_ko["team2"]
+        nk_f1, nk_f2 = _ko_flag(nk_t1), _ko_flag(nk_t2)
+        nk_pred, nk_adj1, nk_adj2 = knockout_predict(nk_t1, nk_t2)
+        nk_wflag = nk_f1 if nk_pred == nk_t1 else nk_f2
+        nk_wpct = nk_adj1 if nk_pred == nk_t1 else nk_adj2
+        nk_ts = int(_parse_ko_date_utc(next_ko).timestamp() * 1000)
+        nk_hero = (
+            "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
+            "<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));"
+            "border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;text-align:center;'>"
+            "<div style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;"
+            "letter-spacing:0.22em;font-weight:700;margin-bottom:8px;'>Next Up · Round of 32</div>"
+            f"<div style='font-size:1.5rem;font-weight:900;color:#f0fdf4;margin-bottom:4px;'>"
+            f"{nk_f1} {nk_t1} <span style='color:#4b7c4b;font-size:1rem;padding:0 8px;'>vs</span> "
+            f"{nk_t2} {nk_f2}</div>"
+            f"<div style='font-size:0.72rem;color:#86efac;margin-bottom:8px;'>"
+            f"{next_ko['slot']} · {next_ko['date']} · {next_ko['venue']} · {next_ko['city']}</div>"
+            f"<div style='font-size:0.85rem;color:#fbbf24;font-weight:700;margin-bottom:10px;'>"
+            f"Predicted: {nk_wflag} {nk_pred} {nk_wpct}%</div>"
+            "<div id='ko-timer' style='font-size:2.2rem;font-weight:900;color:#fbbf24;"
+            "font-variant-numeric:tabular-nums;'>--</div>"
+            "</div>"
+            f"<script>"
+            f"(function(){{var t={nk_ts};var el=document.getElementById('ko-timer');"
+            f"function tick(){{var d=t-Date.now();if(d<=0){{el.textContent='Kickoff!';return;}}"
+            f"var days=Math.floor(d/86400000);var hrs=Math.floor((d%86400000)/3600000);"
+            f"var mins=Math.floor((d%3600000)/60000);var secs=Math.floor((d%60000)/1000);"
+            f"el.textContent=(days>0?days+'d ':'')+hrs+'h '+mins+'m '+secs+'s';}}"
+            f"tick();setInterval(tick,1000);}})();"
+            f"</script>"
+            "</body></html>"
+        )
+        st.components.v1.html(nk_hero, height=160)
+    else:
+        st.markdown(clean_html('''
+        <div style="background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));
+        border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;
+        text-align:center;margin-bottom:16px;">
+        <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;
+        letter-spacing:0.22em;font-weight:700;margin-bottom:8px;">Round of 32 Complete</div>
+        <div style="font-size:1.2rem;font-weight:800;color:#f0fdf4;">All Round of 32 matches played — follow the bracket below</div>
+        </div>'''), unsafe_allow_html=True)
+
+    # ── Bracket progression (R16 → Final) ─────────────────────────────────
+    st.markdown("### 🗺️ Bracket Path")
+    bc1, bc2, bc3, bc4, bc5 = st.columns(5)
+    with bc1:
+        st.markdown(_bracket_round_html("Round of 16", list(BRACKET_ADVANCE.keys())[:8], ko_winners), unsafe_allow_html=True)
+    with bc2:
+        st.markdown(_bracket_round_html("Quarter-Finals", ["QF_1","QF_2","QF_3","QF_4"], ko_winners), unsafe_allow_html=True)
+    with bc3:
+        st.markdown(_bracket_round_html("Semi-Finals", ["SF_1","SF_2"], ko_winners), unsafe_allow_html=True)
+    with bc4:
+        st.markdown(_bracket_round_html("Final", ["FINAL"], ko_winners), unsafe_allow_html=True)
+    with bc5:
+        champ = ko_winners.get("FINAL", {}).get("winner", "TBD")
+        st.markdown(clean_html(f'''
+        <div class="bracket-col" style="text-align:center;padding:24px 14px;">
+            <div class="bracket-round">Champion</div>
+            <div style="font-size:2.5rem;margin:12px 0;">🏆</div>
+            <div style="font-size:1.3rem;font-weight:900;color:#fbbf24;">{_ko_flag(champ)} {champ}</div>
+            <div style="font-size:0.72rem;color:#86efac;margin-top:8px;">Predicted winner</div>
+        </div>'''), unsafe_allow_html=True)
+
+    # ── Round of 32 match cards ───────────────────────────────────────────
+    st.markdown("### ⚔️ Round of 32 — All 16 Matches")
+    st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">June 28 – July 3 · Live scores override predictions when full-time results are available</p>', unsafe_allow_html=True)
+
+    ko_dates = sorted(set(m["date"] for m in WC_ROUND_OF_32), key=lambda d: _KO_DATE_ORDER.get(d, 99))
+    for ko_date in ko_dates:
+        day_matches = [m for m in WC_ROUND_OF_32 if m["date"] == ko_date]
+        st.markdown(f"#### 📅 {ko_date}")
+        cols = st.columns(2)
+        for idx, m in enumerate(day_matches):
+            with cols[idx % 2]:
+                st.markdown(_ko_match_card_html(m, ko_live), unsafe_allow_html=True)
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 4 — WC WATCHLIST
 # ════════════════════════════════════════════════════════════════════════════
 with tab_nat:  # WC Watchlist section
     st.markdown('<p class="page-title">📋 World Cup Watchlist</p>', unsafe_allow_html=True)
