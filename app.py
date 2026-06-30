@@ -682,110 +682,6 @@ def _resolve_match(t1, t2, live_scores):
         # Tied at full time, no ET/penalty data yet -- still pending, not finished
         return False, None, f"{s1_ft}\u2013{s2_ft} (ET/pens pending)", s1, s2, True
 
-def get_predicted_path():
-    """
-    Pure model simulation of the ENTIRE bracket, independent of real results.
-    Runs knockout_predict() at every stage -- R32 -> R16 -> QF -> SF -> Final --
-    so we can show a projected road to the champion even before earlier rounds
-    have actually been played. This is separate from get_bracket_data(), which
-    only fills in rounds once real results confirm them.
-    """
-    pred = {}
-
-    pred_r32 = {}
-    for m in WC_ROUND_OF_32:
-        t1, t2 = m["team1"], m["team2"]
-        w, p1, p2 = knockout_predict(t1, t2)
-        pred_r32[m["slot"]] = {"team1": t1, "team2": t2, "winner": w, "pct": p1 if w == t1 else p2}
-    pred["r32"] = pred_r32
-
-    r16_slots = {
-        "R16_1": ("M3", "M6"), "R16_2": ("M1", "M4"),
-        "R16_3": ("M13", "M11"), "R16_4": ("M10", "M9"),
-        "R16_5": ("M2", "M5"), "R16_6": ("M7", "M8"),
-        "R16_7": ("M15", "M14"), "R16_8": ("M12", "M16"),
-    }
-    pred_r16 = {}
-    for slot_id, (fa, fb) in r16_slots.items():
-        t1, t2 = pred_r32[fa]["winner"], pred_r32[fb]["winner"]
-        w, p1, p2 = knockout_predict(t1, t2)
-        pred_r16[slot_id] = {"team1": t1, "team2": t2, "winner": w, "pct": p1 if w == t1 else p2}
-    pred["r16"] = pred_r16
-
-    qf_slots = {
-        "QF_1": ("R16_1", "R16_2"), "QF_2": ("R16_3", "R16_4"),
-        "QF_3": ("R16_5", "R16_6"), "QF_4": ("R16_7", "R16_8"),
-    }
-    pred_qf = {}
-    for slot_id, (fa, fb) in qf_slots.items():
-        t1, t2 = pred_r16[fa]["winner"], pred_r16[fb]["winner"]
-        w, p1, p2 = knockout_predict(t1, t2)
-        pred_qf[slot_id] = {"team1": t1, "team2": t2, "winner": w, "pct": p1 if w == t1 else p2}
-    pred["qf"] = pred_qf
-
-    sf_slots = {"SF_1": ("QF_1", "QF_2"), "SF_2": ("QF_3", "QF_4")}
-    pred_sf = {}
-    for slot_id, (fa, fb) in sf_slots.items():
-        t1, t2 = pred_qf[fa]["winner"], pred_qf[fb]["winner"]
-        w, p1, p2 = knockout_predict(t1, t2)
-        pred_sf[slot_id] = {"team1": t1, "team2": t2, "winner": w, "pct": p1 if w == t1 else p2}
-    pred["sf"] = pred_sf
-
-    t1, t2 = pred_sf["SF_1"]["winner"], pred_sf["SF_2"]["winner"]
-    w, p1, p2 = knockout_predict(t1, t2)
-    pred["final"] = {"team1": t1, "team2": t2, "winner": w, "pct": p1 if w == t1 else p2}
-
-    return pred
-
-def render_predicted_path():
-    """Shows the model's projected path to the champion: R16 through Final,
-    purely based on predictions, independent of actual results so far."""
-    pred = get_predicted_path()
-
-    st.markdown("### 🔮 Predicted Road to the Final")
-    st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">Model-projected matchups from R16 through the Final — based on predicted winners, not yet-confirmed results.</p>', unsafe_allow_html=True)
-
-    round_labels = [
-        ("r16", "Round of 16", ["R16_1","R16_2","R16_3","R16_4","R16_5","R16_6","R16_7","R16_8"]),
-        ("qf", "Quarterfinals", ["QF_1","QF_2","QF_3","QF_4"]),
-        ("sf", "Semifinals", ["SF_1","SF_2"]),
-    ]
-
-    for round_key, round_title, slot_ids in round_labels:
-        st.markdown(f"**{round_title}**")
-        cols = st.columns(len(slot_ids) if len(slot_ids) <= 4 else 4)
-        for i, slot_id in enumerate(slot_ids):
-            m = pred[round_key][slot_id]
-            t1, t2, w, pct = m["team1"], m["team2"], m["winner"], m["pct"]
-            f1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
-            f2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
-            fw = f1 if w == t1 else f2
-            t1_style = "font-weight:800;color:#4ade80;" if w == t1 else "color:rgba(134,239,172,0.55);"
-            t2_style = "font-weight:800;color:#4ade80;" if w == t2 else "color:rgba(134,239,172,0.55);"
-            with cols[i % 4]:
-                st.markdown(clean_html(f'''
-                <div class="star-box" style="padding:10px 12px;margin-bottom:10px;">
-                    <div style="font-size:0.85rem;{t1_style}">{f1} {t1}</div>
-                    <div style="font-size:0.7rem;color:#4b7c4b;margin:2px 0;">vs</div>
-                    <div style="font-size:0.85rem;{t2_style}">{f2} {t2}</div>
-                    <div style="font-size:0.7rem;color:#fbbf24;margin-top:6px;">Predicted: {fw} {w} {pct}%</div>
-                </div>'''), unsafe_allow_html=True)
-        st.markdown("<div style='height:6px;'></div>", unsafe_allow_html=True)
-
-    final = pred["final"]
-    ft1, ft2, fw, fpct = final["team1"], final["team2"], final["winner"], final["pct"]
-    ff1 = FLAGS.get(NATION_TO_CODE.get(ft1, ""), "⚽")
-    ff2 = FLAGS.get(NATION_TO_CODE.get(ft2, ""), "⚽")
-    ffw = ff1 if fw == ft1 else ff2
-    st.markdown(clean_html(f'''
-    <div style="background:linear-gradient(145deg, rgba(60,44,6,0.95), rgba(251,191,36,0.08));
-                border:2px solid rgba(251,191,36,0.5);border-radius:12px;padding:18px 24px;
-                text-align:center;margin-top:8px;box-shadow:0 0 22px rgba(251,191,36,0.18);">
-        <div style="font-size:0.7rem;color:#fbbf24;text-transform:uppercase;letter-spacing:0.12em;font-weight:700;margin-bottom:8px;">🏆 Predicted Final</div>
-        <div style="font-size:1.1rem;font-weight:700;color:#f0fdf4;">{ff1} {ft1} <span style="color:#4b7c4b;font-size:0.9rem;">vs</span> {ff2} {ft2}</div>
-        <div style="font-size:1.3rem;font-weight:800;color:#fde68a;margin-top:8px;">Predicted Champion: {ffw} {fw} ({fpct}%)</div>
-    </div>'''), unsafe_allow_html=True)
-
 def get_bracket_data(live_scores):
     # R32
     r32 = {}
@@ -1904,9 +1800,6 @@ with tab_bracket:
     render_bracket_tree(ko_live)
     
     render_match_cards(ko_live)
-
-    st.markdown("---")
-    render_predicted_path()
 
 # ════════════════════════════════════════════════════════════════════════════
 # TAB 4 — WC WATCHLIST
