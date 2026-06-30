@@ -28,9 +28,11 @@ API_NAME_MAP = {
     "Czech Republic": "Czechia",
     "Bosnia & Herzegovina": "Bosnia-Herzegovina",
     "USA": "United States",
-    "DR Congo": "Congo DR",
-    "Turkey": "Turkiye",
-    "Curacao": "Curacao",
+    "DR Congo": "DR Congo",
+    "Congo DR": "DR Congo",
+    "Turkey": "Türkiye",
+    "Turkiye": "Türkiye",
+    "Curacao": "Curaçao",
     "Côte d'Ivoire": "Ivory Coast",
     "Cabo Verde": "Cape Verde",
 }
@@ -56,6 +58,8 @@ def fetch_live_scores():
             key = f"{t1}|{t2}"
             scores[key] = {
                 "ft": ft,         # [g1, g2] or None if not played
+                "et": score.get("et"),
+                "p": score.get("p"),
                 "ht": ht,
                 "goals1": goals1,
                 "goals2": goals2,
@@ -110,7 +114,7 @@ NATION_TO_CODE = {
     "Spain":"ESP","Cape Verde":"CPV","Saudi Arabia":"KSA","Uruguay":"URU",
     "France":"FRA","Senegal":"SEN","Iraq":"IRQ","Norway":"NOR",
     "Argentina":"ARG","Algeria":"ALG","Austria":"AUT","Jordan":"JOR",
-    "Portugal":"POR","Congo DR":"COD","Uzbekistan":"UZB","Colombia":"COL",
+    "Portugal":"POR","DR Congo":"COD","Uzbekistan":"UZB","Colombia":"COL",
     "England":"ENG","Croatia":"CRO","Ghana":"GHA","Panama":"PAN",
 }
 
@@ -136,7 +140,7 @@ GROUPS = {
     "H":["Spain","Cape Verde","Saudi Arabia","Uruguay"],
     "I":["France","Senegal","Iraq","Norway"],
     "J":["Argentina","Algeria","Austria","Jordan"],
-    "K":["Portugal","Congo DR","Uzbekistan","Colombia"],
+    "K":["Portugal","DR Congo","Uzbekistan","Colombia"],
     "L":["England","Croatia","Ghana","Panama"],
 }
 
@@ -212,12 +216,12 @@ WC_SCHEDULE = [
     {"group":"J","team1":"Jordan","team2":"Argentina","date":"Jun 27","time":"10:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
     {"group":"J","team1":"Algeria","team2":"Austria","date":"Jun 27","time":"10:00 PM ET","venue":"Arrowhead Stadium","city":"Kansas City"},
     # ── GROUP K ───────────────────────────────────────────────────────────
-    {"group":"K","team1":"Portugal","team2":"Congo DR","date":"Jun 17","time":"1:00 PM ET","venue":"NRG Stadium","city":"Houston"},
+    {"group":"K","team1":"Portugal","team2":"DR Congo","date":"Jun 17","time":"1:00 PM ET","venue":"NRG Stadium","city":"Houston"},
     {"group":"K","team1":"Uzbekistan","team2":"Colombia","date":"Jun 17","time":"10:00 PM ET","venue":"Estadio Azteca","city":"Mexico City"},
     {"group":"K","team1":"Portugal","team2":"Uzbekistan","date":"Jun 23","time":"1:00 PM ET","venue":"NRG Stadium","city":"Houston"},
-    {"group":"K","team1":"Colombia","team2":"Congo DR","date":"Jun 23","time":"10:00 PM ET","venue":"Estadio Akron","city":"Guadalajara"},
+    {"group":"K","team1":"Colombia","team2":"DR Congo","date":"Jun 23","time":"10:00 PM ET","venue":"Estadio Akron","city":"Guadalajara"},
     {"group":"K","team1":"Colombia","team2":"Portugal","date":"Jun 27","time":"7:30 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
-    {"group":"K","team1":"Congo DR","team2":"Uzbekistan","date":"Jun 27","time":"7:30 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"group":"K","team1":"DR Congo","team2":"Uzbekistan","date":"Jun 27","time":"7:30 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
     # ── GROUP L ───────────────────────────────────────────────────────────
     {"group":"L","team1":"England","team2":"Croatia","date":"Jun 17","time":"4:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
     {"group":"L","team1":"Ghana","team2":"Panama","date":"Jun 17","time":"7:00 PM ET","venue":"BMO Field","city":"Toronto"},
@@ -236,7 +240,7 @@ WC_ROUND_OF_32 = [
     {"slot":"M5","team1":"Ivory Coast","team2":"Norway","date":"June 30","venue":"AT&T Stadium","city":"Arlington"},
     {"slot":"M6","team1":"France","team2":"Sweden","date":"June 30","venue":"MetLife Stadium","city":"East Rutherford"},
     {"slot":"M7","team1":"Mexico","team2":"Ecuador","date":"June 30","venue":"Estadio Azteca","city":"Mexico City"},
-    {"slot":"M8","team1":"England","team2":"Congo DR","date":"July 1","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"slot":"M8","team1":"England","team2":"DR Congo","date":"July 1","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
     {"slot":"M9","team1":"Belgium","team2":"Senegal","date":"July 1","venue":"Lumen Field","city":"Seattle"},
     {"slot":"M10","team1":"United States","team2":"Bosnia-Herzegovina","date":"July 1","venue":"Levi's Stadium","city":"Santa Clara"},
     {"slot":"M11","team1":"Spain","team2":"Austria","date":"July 2","venue":"SoFi Stadium","city":"Inglewood"},
@@ -596,17 +600,39 @@ def _ko_flag(team):
 
 def _resolve_ko_matchup(team1, team2, live_scores):
     """Return winner info for a knockout matchup (live score overrides model)."""
-    s1, s2, _, _ = get_match_score(team1, team2, live_scores)
+    match_data = None
+    reversed_key = False
+    for k in [f"{team1}|{team2}", f"{team2}|{team1}"]:
+        if k in live_scores:
+            match_data = live_scores[k]
+            if k == f"{team2}|{team1}":
+                reversed_key = True
+            break
+            
     pred_w, adj1, adj2 = knockout_predict(team1, team2)
-    if s1 is not None:
-        if s1 > s2:
-            winner = team1
-        elif s2 > s1:
-            winner = team2
+    
+    if match_data and match_data.get("ft") is not None:
+        ft = match_data["ft"]
+        et = match_data.get("et")
+        p = match_data.get("p")
+        
+        s1_ft, s2_ft = (ft[1], ft[0]) if reversed_key else (ft[0], ft[1])
+        
+        if p is not None:
+            s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+            winner = team1 if s1_p > s2_p else team2
+            score_str = f"{s1_ft}–{s2_ft} ({s1_p}–{s2_p} pen)"
+        elif et is not None:
+            s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+            winner = team1 if s1_et > s2_et else team2
+            score_str = f"{s1_et}–{s2_et} AET"
         else:
-            winner = pred_w
-        return {"winner": winner, "is_actual": True, "score": f"{s1}–{s2}",
+            winner = team1 if s1_ft > s2_ft else team2
+            score_str = f"{s1_ft}–{s2_ft}"
+            
+        return {"winner": winner, "is_actual": True, "score": score_str,
                 "adj1": adj1, "adj2": adj2, "pred": pred_w}
+                
     return {"winner": pred_w, "is_actual": False, "score": None,
             "adj1": adj1, "adj2": adj2, "pred": pred_w}
 
@@ -640,10 +666,22 @@ def _ko_match_card_html(match, live_scores):
     w_pct = info["adj1"] if winner == t1 else info["adj2"]
 
     if info["is_actual"]:
+        score_main = info["score"]
+        details = ""
+        if " " in info["score"]:
+            score_main, details = info["score"].split(" ", 1)
+        
+        score_parts = score_main.split("–")
+        s1_part = score_parts[0]
+        s2_part = score_parts[1] if len(score_parts) > 1 else ""
+        
+        details_html = f'<div style="font-size:0.9rem;color:#86efac;margin-top:2px;">{details}</div>' if details else ""
+        
         result_html = (
-            f'<div class="ko-score">{f1} {info["score"].split("–")[0]} '
+            f'<div class="ko-score">{f1} {s1_part} '
             f'<span style="color:#4b7c4b;">–</span> '
-            f'{info["score"].split("–")[1]} {f2}</div>'
+            f'{s2_part} {f2}</div>'
+            f'{details_html}'
             f'<div class="ko-badge actual">🏆 {f1 if winner==t1 else f2} {winner} wins</div>'
         )
     else:
