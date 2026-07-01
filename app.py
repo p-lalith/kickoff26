@@ -1734,20 +1734,15 @@ with tab_bracket:
     # Helper to find the next upcoming knockout match (Round of 32)
     def _next_ko_match(ko_live):
         """
-        Return the next upcoming knockout match.
-        - Skip if API has a score (finished)
-        - Skip if kickoff was more than 2.5 hours ago (match window over)
-        - Do NOT skip just because kickoff time has passed (match may be live)
+        Return the next unfinished knockout match.
+        Only skips a match if the API has confirmed a score for it.
+        Does NOT skip based on kickoff time — a match in progress
+        has no API score yet and should still show as current.
         """
-        now_utc = datetime.now(timezone.utc)
         for m in sorted(WC_ROUND_OF_32, key=_parse_ko_date_utc):
             s1, s2, _, _ = get_match_score(m["team1"], m["team2"], ko_live)
-            if s1 is not None:
-                continue  # confirmed finished by API
-            kickoff = _parse_ko_date_utc(m)
-            if kickoff and (now_utc - kickoff).total_seconds() > 9000:
-                continue  # more than 2.5 hours since kickoff, assume done
-            return m
+            if s1 is None:
+                return m
         return None
     st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">Follow the visual bracket tree and explore predicted matchups vs actual results.</p>', unsafe_allow_html=True)
@@ -1763,12 +1758,15 @@ with tab_bracket:
         nk_wflag = nk_f1 if nk_pred == nk_t1 else nk_f2
         nk_wpct = nk_adj1 if nk_pred == nk_t1 else nk_adj2
         nk_ts = int(_parse_ko_date_utc(next_ko).timestamp() * 1000)
+        now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
+        is_live_now = now_ms >= nk_ts
+        top_label = "🔴 LIVE Now · Round of 32" if is_live_now else "Next Up · Round of 32"
         nk_hero = (
             "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
             "<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));"
             "border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;text-align:center;'>"
             "<div style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;"
-            "letter-spacing:0.22em;font-weight:700;margin-bottom:8px;'>Next Up · Round of 32</div>"
+            "letter-spacing:0.22em;font-weight:700;margin-bottom:8px;'>" + top_label + "</div>"
             f"<div style='font-size:1.5rem;font-weight:900;color:#f0fdf4;margin-bottom:4px;'>"
             f"{nk_f1} {nk_t1} <span style='color:#4b7c4b;font-size:1rem;padding:0 8px;'>vs</span> "
             f"{nk_t2} {nk_f2}</div>"
