@@ -1734,17 +1734,19 @@ with tab_bracket:
     # Helper to find the next upcoming knockout match (Round of 32)
     def _next_ko_match(ko_live):
         """
-        Return the next UPCOMING knockout match — skips matches that have
-        already kicked off (even if API score isn't recorded yet).
+        Return the next upcoming knockout match.
+        - Skip if API has a score (finished)
+        - Skip if kickoff was more than 2.5 hours ago (match window over)
+        - Do NOT skip just because kickoff time has passed (match may be live)
         """
         now_utc = datetime.now(timezone.utc)
         for m in sorted(WC_ROUND_OF_32, key=_parse_ko_date_utc):
             s1, s2, _, _ = get_match_score(m["team1"], m["team2"], ko_live)
             if s1 is not None:
-                continue  # already finished per API
+                continue  # confirmed finished by API
             kickoff = _parse_ko_date_utc(m)
-            if kickoff and now_utc >= kickoff:
-                continue  # already kicked off, skip
+            if kickoff and (now_utc - kickoff).total_seconds() > 9000:
+                continue  # more than 2.5 hours since kickoff, assume done
             return m
         return None
     st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
