@@ -1735,14 +1735,20 @@ with tab_bracket:
     def _next_ko_match(ko_live):
         """
         Return the next unfinished knockout match.
-        Only skips a match if the API has confirmed a score for it.
-        Does NOT skip based on kickoff time — a match in progress
-        has no API score yet and should still show as current.
+        Skips a match if:
+        1. API has confirmed a score (finished), OR
+        2. More than 2.5 hours since kickoff (match window over, API may be slow)
+        Does NOT skip just because kickoff time has passed — match may be live.
         """
+        now_utc = datetime.now(timezone.utc)
         for m in sorted(WC_ROUND_OF_32, key=_parse_ko_date_utc):
             s1, s2, _, _ = get_match_score(m["team1"], m["team2"], ko_live)
-            if s1 is None:
-                return m
+            if s1 is not None:
+                continue  # confirmed finished by API
+            kickoff = _parse_ko_date_utc(m)
+            if kickoff and (now_utc - kickoff).total_seconds() > 9000:
+                continue  # 2.5+ hours past kickoff, assume done even without API score
+            return m
         return None
     st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
     st.markdown('<p class="page-sub">Follow the visual bracket tree and explore predicted matchups vs actual results.</p>', unsafe_allow_html=True)
