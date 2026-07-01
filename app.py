@@ -1756,10 +1756,11 @@ with tab_bracket:
         nk_pred, nk_adj1, nk_adj2 = knockout_predict(nk_t1, nk_t2)
         nk_wflag = nk_f1 if nk_pred == nk_t1 else nk_f2
         nk_wpct = nk_adj1 if nk_pred == nk_t1 else nk_adj2
-        nk_ts = int(_parse_ko_date_utc(next_ko).timestamp() * 1000)
+        kickoff_dt = _parse_ko_date_utc(next_ko)
+        nk_ts = int(kickoff_dt.timestamp() * 1000)
         now_ms = int(datetime.now(timezone.utc).timestamp() * 1000)
         is_live_now = now_ms >= nk_ts
-        top_label = "🔴 LIVE Now · Round of 32" if is_live_now else "Next Up · Round of 32"
+        top_label = "🔴 Live Now · Round of 32" if is_live_now else "Next Up · Round of 32"
         nk_hero = (
             "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
             "<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));"
@@ -1770,7 +1771,8 @@ with tab_bracket:
             f"{nk_f1} {nk_t1} <span style='color:#4b7c4b;font-size:1rem;padding:0 8px;'>vs</span> "
             f"{nk_t2} {nk_f2}</div>"
             f"<div style='font-size:0.72rem;color:#86efac;margin-bottom:8px;'>"
-            f"{next_ko['slot']} · {next_ko['date']} · {next_ko['venue']} · {next_ko['city']}</div>"
+            f"{next_ko['slot']} · {next_ko['date']} · {next_ko.get('time','')}"
+            f" · {next_ko['venue']} · {next_ko['city']}</div>"
             f"<div style='font-size:0.85rem;color:#fbbf24;font-weight:700;margin-bottom:10px;'>"
             f"Predicted: {nk_wflag} {nk_pred} {nk_wpct}%</div>"
             "<div id='ko-timer' style='font-size:2.2rem;font-weight:900;color:#fbbf24;"
@@ -1778,10 +1780,13 @@ with tab_bracket:
             "</div>"
             f"<script>"
             f"(function(){{var t={nk_ts};var el=document.getElementById('ko-timer');"
-            f"function tick(){{var d=t-Date.now();if(d<=0){{el.textContent='Kickoff!';return;}}"
-            f"var days=Math.floor(d/86400000);var hrs=Math.floor((d%86400000)/3600000);"
-            f"var mins=Math.floor((d%3600000)/60000);var secs=Math.floor((d%60000)/1000);"
-            f"el.textContent=(days>0?days+'d ':'')+hrs+'h '+mins+'m '+secs+'s';}}"
+            f"function tick(){{"
+            f"var d=t-Date.now();"
+            f"if(d<=0){{el.textContent='🔴 In Progress';el.style.fontSize='1.4rem';return;}}"
+            f"var hrs=Math.floor(d/3600000);"
+            f"var mins=Math.floor((d%3600000)/60000);"
+            f"var secs=Math.floor((d%60000)/1000);"
+            f"el.textContent=hrs+'h '+mins+'m '+secs+'s';}}"
             f"tick();setInterval(tick,1000);}})();"
             f"</script>"
             "</body></html>"
