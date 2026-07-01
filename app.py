@@ -247,21 +247,21 @@ WC_SCHEDULE = [
 # ── ROUND OF 32 (locked tournament bracket) ─────────────────────────────────
 WC_ROUND_OF_32 = [
     {"slot":"M1","team1":"South Africa","team2":"Canada","date":"June 28","time":"3:00 PM ET","venue":"SoFi Stadium","city":"Inglewood"},
-    {"slot":"M2","team1":"Brazil","team2":"Japan","date":"June 29","time":"3:00 PM ET","venue":"NRG Stadium","city":"Houston"},
-    {"slot":"M3","team1":"Germany","team2":"Paraguay","date":"June 29","time":"6:00 PM ET","venue":"Gillette Stadium","city":"Foxborough"},
+    {"slot":"M2","team1":"Brazil","team2":"Japan","date":"June 29","time":"12:00 PM ET","venue":"NRG Stadium","city":"Houston"},
+    {"slot":"M3","team1":"Germany","team2":"Paraguay","date":"June 29","time":"3:00 PM ET","venue":"Gillette Stadium","city":"Foxborough"},
     {"slot":"M4","team1":"Netherlands","team2":"Morocco","date":"June 29","time":"9:00 PM ET","venue":"Estadio Monterrey","city":"Monterrey"},
-    {"slot":"M5","team1":"Ivory Coast","team2":"Norway","date":"June 30","time":"3:00 PM ET","venue":"AT&T Stadium","city":"Arlington"},
-    {"slot":"M6","team1":"France","team2":"Sweden","date":"June 30","time":"6:00 PM ET","venue":"MetLife Stadium","city":"East Rutherford"},
+    {"slot":"M5","team1":"Ivory Coast","team2":"Norway","date":"June 30","time":"12:00 PM ET","venue":"AT&T Stadium","city":"Arlington"},
+    {"slot":"M6","team1":"France","team2":"Sweden","date":"June 30","time":"3:00 PM ET","venue":"MetLife Stadium","city":"East Rutherford"},
     {"slot":"M7","team1":"Mexico","team2":"Ecuador","date":"June 30","time":"9:00 PM ET","venue":"Estadio Azteca","city":"Mexico City"},
-    {"slot":"M8","team1":"England","team2":"DR Congo","date":"July 1","time":"3:00 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
-    {"slot":"M9","team1":"Belgium","team2":"Senegal","date":"July 1","time":"6:00 PM ET","venue":"Lumen Field","city":"Seattle"},
-    {"slot":"M10","team1":"United States","team2":"Bosnia-Herzegovina","date":"July 1","time":"9:00 PM ET","venue":"Levi's Stadium","city":"Santa Clara"},
+    {"slot":"M8","team1":"England","team2":"DR Congo","date":"July 1","time":"12:00 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"slot":"M9","team1":"Belgium","team2":"Senegal","date":"July 1","time":"4:00 PM ET","venue":"Lumen Field","city":"Seattle"},
+    {"slot":"M10","team1":"United States","team2":"Bosnia-Herzegovina","date":"July 1","time":"8:00 PM ET","venue":"Levi's Stadium","city":"Santa Clara"},
     {"slot":"M11","team1":"Spain","team2":"Austria","date":"July 2","time":"3:00 PM ET","venue":"SoFi Stadium","city":"Inglewood"},
-    {"slot":"M12","team1":"Switzerland","team2":"Algeria","date":"July 2","time":"6:00 PM ET","venue":"Vancouver Stadium","city":"Vancouver"},
-    {"slot":"M13","team1":"Portugal","team2":"Croatia","date":"July 2","time":"9:00 PM ET","venue":"Toronto Stadium","city":"Toronto"},
-    {"slot":"M14","team1":"Australia","team2":"Egypt","date":"July 3","time":"3:00 PM ET","venue":"AT&T Stadium","city":"Arlington"},
+    {"slot":"M12","team1":"Switzerland","team2":"Algeria","date":"July 2","time":"11:00 PM ET","venue":"Vancouver Stadium","city":"Vancouver"},
+    {"slot":"M13","team1":"Portugal","team2":"Croatia","date":"July 2","time":"7:00 PM ET","venue":"Toronto Stadium","city":"Toronto"},
+    {"slot":"M14","team1":"Australia","team2":"Egypt","date":"July 3","time":"2:00 PM ET","venue":"AT&T Stadium","city":"Arlington"},
     {"slot":"M15","team1":"Argentina","team2":"Cape Verde","date":"July 3","time":"6:00 PM ET","venue":"Hard Rock Stadium","city":"Miami Gardens"},
-    {"slot":"M16","team1":"Colombia","team2":"Ghana","date":"July 3","time":"9:00 PM ET","venue":"Arrowhead Stadium","city":"Kansas City"},
+    {"slot":"M16","team1":"Colombia","team2":"Ghana","date":"July 3","time":"9:30 PM ET","venue":"Arrowhead Stadium","city":"Kansas City"},
 ]
 
 ROUND_OF_16_PAIRS = [
