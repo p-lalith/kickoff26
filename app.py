@@ -28,15 +28,6 @@ API_NAME_MAP = {
     "USA": "United States",
     "DR Congo": "Congo DR",
     "Turkey": "Turkiye",
-}
-
-
-API_NAME_MAP = {
-    "Czech Republic": "Czechia",
-    "Bosnia & Herzegovina": "Bosnia-Herzegovina",
-    "USA": "United States",
-    "DR Congo": "Congo DR",
-    "Turkey": "Turkiye",
     "Curacao": "Curacao",
 }
 
@@ -494,7 +485,9 @@ if _bm:
             "</div>"
             "</body></html>"
         )
-        st.components.v1.html(_hero_html, height=90)
+        import base64 as _b64
+        _hero_b64 = _b64.b64encode(_hero_html.encode()).decode()
+        st.markdown(f'<iframe src="data:text/html;base64,{_hero_b64}" height="90" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
 
 # ── LOAD DATA ─────────────────────────────────────────────────────────────
 @st.cache_data
