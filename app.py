@@ -1,7 +1,10 @@
 import streamlit as st
+import base64
 import urllib.request
 import json as _json
 import streamlit.components.v1 as components
+import urllib.request
+import json as _json
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -26,9 +29,13 @@ API_NAME_MAP = {
     "Czech Republic": "Czechia",
     "Bosnia & Herzegovina": "Bosnia-Herzegovina",
     "USA": "United States",
-    "DR Congo": "Congo DR",
-    "Turkey": "Turkiye",
-    "Curacao": "Curacao",
+    "DR Congo": "DR Congo",
+    "Congo DR": "DR Congo",
+    "Turkey": "Türkiye",
+    "Turkiye": "Türkiye",
+    "Curacao": "Curaçao",
+    "Côte d'Ivoire": "Ivory Coast",
+    "Cabo Verde": "Cape Verde",
 }
 
 @st.cache_data(ttl=300)
@@ -52,6 +59,8 @@ def fetch_live_scores():
             key = f"{t1}|{t2}"
             scores[key] = {
                 "ft": ft,         # [g1, g2] or None if not played
+                "et": score.get("et"),
+                "p": score.get("p"),
                 "ht": ht,
                 "goals1": goals1,
                 "goals2": goals2,
@@ -95,6 +104,19 @@ FLAGS = {
     "HAI":"🇭🇹","CUW":"🇨🇼","TUR":"🇹🇷","EGY":"🇪🇬","SVN":"🇸🇮",
 }
 
+# Primary flag-accent color per nation code, used as a subtle left-border
+# accent on bracket team rows so each team carries its national color identity.
+TEAM_COLORS = {
+    "RSA":"#007A4D","CAN":"#FF0000","BRA":"#009739","JPN":"#BC002D",
+    "GER":"#DD0000","PAR":"#D52B1E","NED":"#FF6F00","MAR":"#C1272D",
+    "CIV":"#FF8200","NOR":"#BA0C2F","FRA":"#0055A4","SWE":"#006AA7",
+    "MEX":"#006847","ECU":"#FFD100","ENG":"#CE1124","COD":"#007FFF",
+    "BEL":"#ED2939","SEN":"#00853F","USA":"#3C3B6E","BIH":"#002395",
+    "ESP":"#AA151B","AUT":"#ED2939","SUI":"#FF0000","ALG":"#006233",
+    "POR":"#006600","CRO":"#FF0000","AUS":"#00008B","EGY":"#CE1126",
+    "ARG":"#74ACDF","CPV":"#003893","COL":"#FCD116","GHA":"#006B3F",
+}
+
 NATION_TO_CODE = {
     "Mexico":"MEX","South Africa":"RSA","South Korea":"KOR","Czechia":"CZE",
     "Canada":"CAN","Bosnia-Herzegovina":"BIH","Qatar":"QAT","Switzerland":"SUI",
@@ -106,7 +128,7 @@ NATION_TO_CODE = {
     "Spain":"ESP","Cape Verde":"CPV","Saudi Arabia":"KSA","Uruguay":"URU",
     "France":"FRA","Senegal":"SEN","Iraq":"IRQ","Norway":"NOR",
     "Argentina":"ARG","Algeria":"ALG","Austria":"AUT","Jordan":"JOR",
-    "Portugal":"POR","Congo DR":"COD","Uzbekistan":"UZB","Colombia":"COL",
+    "Portugal":"POR","DR Congo":"COD","Uzbekistan":"UZB","Colombia":"COL",
     "England":"ENG","Croatia":"CRO","Ghana":"GHA","Panama":"PAN",
 }
 
@@ -132,7 +154,7 @@ GROUPS = {
     "H":["Spain","Cape Verde","Saudi Arabia","Uruguay"],
     "I":["France","Senegal","Iraq","Norway"],
     "J":["Argentina","Algeria","Austria","Jordan"],
-    "K":["Portugal","Congo DR","Uzbekistan","Colombia"],
+    "K":["Portugal","DR Congo","Uzbekistan","Colombia"],
     "L":["England","Croatia","Ghana","Panama"],
 }
 
@@ -208,12 +230,12 @@ WC_SCHEDULE = [
     {"group":"J","team1":"Jordan","team2":"Argentina","date":"Jun 27","time":"10:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
     {"group":"J","team1":"Algeria","team2":"Austria","date":"Jun 27","time":"10:00 PM ET","venue":"Arrowhead Stadium","city":"Kansas City"},
     # ── GROUP K ───────────────────────────────────────────────────────────
-    {"group":"K","team1":"Portugal","team2":"Congo DR","date":"Jun 17","time":"1:00 PM ET","venue":"NRG Stadium","city":"Houston"},
+    {"group":"K","team1":"Portugal","team2":"DR Congo","date":"Jun 17","time":"1:00 PM ET","venue":"NRG Stadium","city":"Houston"},
     {"group":"K","team1":"Uzbekistan","team2":"Colombia","date":"Jun 17","time":"10:00 PM ET","venue":"Estadio Azteca","city":"Mexico City"},
     {"group":"K","team1":"Portugal","team2":"Uzbekistan","date":"Jun 23","time":"1:00 PM ET","venue":"NRG Stadium","city":"Houston"},
-    {"group":"K","team1":"Colombia","team2":"Congo DR","date":"Jun 23","time":"10:00 PM ET","venue":"Estadio Akron","city":"Guadalajara"},
+    {"group":"K","team1":"Colombia","team2":"DR Congo","date":"Jun 23","time":"10:00 PM ET","venue":"Estadio Akron","city":"Guadalajara"},
     {"group":"K","team1":"Colombia","team2":"Portugal","date":"Jun 27","time":"7:30 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
-    {"group":"K","team1":"Congo DR","team2":"Uzbekistan","date":"Jun 27","time":"7:30 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"group":"K","team1":"DR Congo","team2":"Uzbekistan","date":"Jun 27","time":"7:30 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
     # ── GROUP L ───────────────────────────────────────────────────────────
     {"group":"L","team1":"England","team2":"Croatia","date":"Jun 17","time":"4:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
     {"group":"L","team1":"Ghana","team2":"Panama","date":"Jun 17","time":"7:00 PM ET","venue":"BMO Field","city":"Toronto"},
@@ -256,7 +278,43 @@ WC_SCHEDULE = [
     {"group":"3PL","team1":"3rd Place Match","team2":"TBD","date":"Jul 18","time":"8:00 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
     {"group":"FIN","team1":"World Cup Final","team2":"TBD","date":"Jul 19","time":"8:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
 ]
-# 
+
+# ── ROUND OF 32 (locked tournament bracket) ─────────────────────────────────
+WC_ROUND_OF_32 = [
+    {"slot":"M1","team1":"South Africa","team2":"Canada","date":"June 28","time":"3:00 PM ET","venue":"SoFi Stadium","city":"Inglewood"},
+    {"slot":"M2","team1":"Brazil","team2":"Japan","date":"June 29","time":"12:00 PM ET","venue":"NRG Stadium","city":"Houston"},
+    {"slot":"M3","team1":"Germany","team2":"Paraguay","date":"June 29","time":"3:00 PM ET","venue":"Gillette Stadium","city":"Foxborough"},
+    {"slot":"M4","team1":"Netherlands","team2":"Morocco","date":"June 29","time":"9:00 PM ET","venue":"Estadio Monterrey","city":"Monterrey"},
+    {"slot":"M5","team1":"Ivory Coast","team2":"Norway","date":"June 30","time":"12:00 PM ET","venue":"AT&T Stadium","city":"Arlington"},
+    {"slot":"M6","team1":"France","team2":"Sweden","date":"June 30","time":"3:00 PM ET","venue":"MetLife Stadium","city":"East Rutherford"},
+    {"slot":"M7","team1":"Mexico","team2":"Ecuador","date":"June 30","time":"9:00 PM ET","venue":"Estadio Azteca","city":"Mexico City"},
+    {"slot":"M8","team1":"England","team2":"DR Congo","date":"July 1","time":"12:00 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"slot":"M9","team1":"Belgium","team2":"Senegal","date":"July 1","time":"4:00 PM ET","venue":"Lumen Field","city":"Seattle"},
+    {"slot":"M10","team1":"United States","team2":"Bosnia-Herzegovina","date":"July 1","time":"8:00 PM ET","venue":"Levi's Stadium","city":"Santa Clara"},
+    {"slot":"M11","team1":"Spain","team2":"Austria","date":"July 2","time":"3:00 PM ET","venue":"SoFi Stadium","city":"Inglewood"},
+    {"slot":"M12","team1":"Switzerland","team2":"Algeria","date":"July 2","time":"11:00 PM ET","venue":"Vancouver Stadium","city":"Vancouver"},
+    {"slot":"M13","team1":"Portugal","team2":"Croatia","date":"July 2","time":"7:00 PM ET","venue":"Toronto Stadium","city":"Toronto"},
+    {"slot":"M14","team1":"Australia","team2":"Egypt","date":"July 3","time":"2:00 PM ET","venue":"AT&T Stadium","city":"Arlington"},
+    {"slot":"M15","team1":"Argentina","team2":"Cape Verde","date":"July 3","time":"6:00 PM ET","venue":"Hard Rock Stadium","city":"Miami Gardens"},
+    {"slot":"M16","team1":"Colombia","team2":"Ghana","date":"July 3","time":"9:30 PM ET","venue":"Arrowhead Stadium","city":"Kansas City"},
+]
+
+ROUND_OF_16_PAIRS = [
+    ("M3","M6"), ("M1","M4"), ("M13","M11"), ("M10","M9"),
+    ("M2","M5"), ("M7","M8"), ("M15","M14"), ("M12","M16"),
+]
+
+# R16 → QF → SF → Final adjacency (Left side = M1,M3,M4,M6,M9,M10,M11,M13 / Right side = M2,M5,M7,M8,M12,M14,M15,M16)
+BRACKET_ADVANCE = {
+    "R16_1": ("M3","M6"), "R16_2": ("M1","M4"),
+    "R16_3": ("M13","M11"), "R16_4": ("M10","M9"),
+    "R16_5": ("M2","M5"), "R16_6": ("M7","M8"),
+    "R16_7": ("M15","M14"), "R16_8": ("M12","M16"),
+    "QF_1": ("R16_1","R16_2"), "QF_2": ("R16_3","R16_4"),
+    "QF_3": ("R16_5","R16_6"), "QF_4": ("R16_7","R16_8"),
+    "SF_1": ("QF_1","QF_2"), "SF_2": ("QF_3","QF_4"),
+    "FINAL": ("SF_1","SF_2"),
+}
 
 
 # ── HEAD TO HEAD HISTORY ──────────────────────────────────────────────────
@@ -364,6 +422,23 @@ section[data-testid="stSidebar"]{display:none;}
 .ctable{width:100%;border-collapse:collapse;margin-top:16px;background:rgba(5,18,5,0.6);border-radius:12px;border:1px solid rgba(74,222,128,0.1);overflow:hidden;}
 .ctable th{padding:12px 16px;color:#86efac;font-weight:600;text-align:left;background:rgba(8,32,8,0.8);border-bottom:2px solid rgba(74,222,128,0.15);}
 .ctable td{padding:10px 16px;border-bottom:1px solid rgba(74,222,128,0.05);color:#dcfce7;}
+
+/* Knockout bracket */
+.ko-card{background:rgba(8,28,8,0.85);border:1px solid rgba(74,222,128,0.15);border-radius:14px;padding:18px 20px;margin-bottom:12px;transition:all 0.25s;}
+.ko-card:hover{border-color:rgba(74,222,128,0.3);transform:translateY(-2px);}
+.ko-card.played{border-color:rgba(74,222,128,0.35);background:rgba(8,32,8,0.95);}
+.ko-slot{font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.12em;font-weight:700;margin-bottom:8px;}
+.ko-teams{font-size:1rem;font-weight:700;color:#f0fdf4;margin-bottom:10px;line-height:1.5;}
+.ko-meta{font-size:0.75rem;color:#86efac;opacity:0.75;margin-bottom:12px;}
+.ko-badge{display:inline-block;background:rgba(251,191,36,0.12);border:1px solid rgba(251,191,36,0.35);color:#fbbf24;padding:4px 12px;border-radius:9999px;font-size:0.78rem;font-weight:700;margin-top:6px;}
+.ko-badge.actual{background:rgba(74,222,128,0.12);border-color:rgba(74,222,128,0.35);color:#4ade80;}
+.ko-score{font-size:1.4rem;font-weight:900;color:#f0fdf4;margin:8px 0;}
+.bracket-col{background:rgba(5,18,5,0.5);border:1px solid rgba(74,222,128,0.08);border-radius:14px;padding:14px;margin-bottom:12px;}
+.bracket-round{font-size:0.72rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.1em;font-weight:700;margin-bottom:10px;text-align:center;}
+.bracket-match{background:rgba(8,28,8,0.7);border:1px solid rgba(74,222,128,0.1);border-radius:10px;padding:10px 12px;margin-bottom:8px;font-size:0.82rem;}
+.bracket-team{color:#f0fdf4;font-weight:600;}
+.bracket-team.winner{color:#4ade80;}
+.bracket-tbd{color:#4b7c4b;font-style:italic;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -485,9 +560,8 @@ if _bm:
             "</div>"
             "</body></html>"
         )
-        import base64 as _b64
-        _hero_b64 = _b64.b64encode(_hero_html.encode()).decode()
-        st.markdown(f'<iframe src="data:text/html;base64,{_hero_b64}" height="90" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
+        _hero_b64 = base64.b64encode(_hero_html.encode("utf-8")).decode()
+        st.markdown(f'<iframe src="data:text/html;charset=utf-8;base64,{_hero_b64}" height="90" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
 
 # ── LOAD DATA ─────────────────────────────────────────────────────────────
 @st.cache_data
@@ -546,16 +620,859 @@ def win_probability(team1, team2):
     p2 = raw2 * (1 - draw_prob)
     return round(p1*100,1), round(draw_prob*100,1), round(p2*100,1)
 
+def knockout_predict(team1, team2):
+    """Knockout win% — redistributes draw probability proportionally."""
+    wp1, wpd, wp2 = win_probability(team1, team2)
+    total = wp1 + wp2
+    adj1 = wp1 + wpd * (wp1/total if total>0 else 0.5)
+    adj2 = wp2 + wpd * (wp2/total if total>0 else 0.5)
+    predicted_winner = team1 if adj1 >= adj2 else team2
+    return predicted_winner, round(adj1, 1), round(adj2, 1)
+
+_KO_DATE_ORDER = {
+    "June 28": 0, "June 29": 1, "June 30": 2,
+    "July 1": 3, "July 2": 4, "July 3": 5,
+}
+
+def _parse_ko_date_utc(match):
+    """Parse knockout date + time to UTC. Uses same logic as _parse_match_utc."""
+    return _parse_match_utc(match)[0] or datetime(2099, 1, 1, tzinfo=timezone.utc)
+
+def _ko_flag(team):
+    return FLAGS.get(NATION_TO_CODE.get(team, ""), "⚽")
+
+def get_round_of_32_data():
+    """Return the hardcoded Round of 32 matchups list."""
+    return WC_ROUND_OF_32
+
+def _pretty_feed_label(feed_id):
+    """Convert a feed id like 'M3', 'R16_1', 'QF_1', 'SF_1' into a clean,
+    human-readable placeholder label for unplayed bracket slots."""
+    if feed_id.startswith("M"):
+        return f"Winner · Match {feed_id[1:]}"
+    if feed_id.startswith("R16_"):
+        return f"Winner · R16 #{feed_id.split('_')[1]}"
+    if feed_id.startswith("QF_"):
+        return f"Winner · QF{feed_id.split('_')[1]}"
+    if feed_id.startswith("SF"):
+        n = feed_id.replace("SF_", "").replace("SF", "")
+        return f"Winner · SF{n}"
+    return f"Winner · {feed_id}"
+
+def _resolve_match(t1, t2, live_scores):
+    """
+    Single source of truth for resolving a knockout match's state.
+    Returns (is_finished, winner, score_str, s1, s2, is_live).
+
+    Fixes two bugs from the previous per-block duplicated logic:
+    1. A tied full-time score with no ET/penalty data was previously
+       defaulting to "t2 wins" (since s1_ft > s2_ft was False). Now a
+       tie with no decisive data correctly stays unresolved (is_finished=False).
+    2. "Live" was previously guessed purely from the match date matching
+       today, even if kickoff hadn't happened yet. Now it's only flagged
+       live when the API actually shows in-progress signal (half-time
+       score or recorded goals) with no full-time result yet.
+    """
+    s1, s2, _, _ = get_match_score(t1, t2, live_scores)
+
+    match_data = None
+    reversed_key = False
+    for k in [f"{t1}|{t2}", f"{t2}|{t1}"]:
+        if k in live_scores:
+            match_data = live_scores[k]
+            reversed_key = (k == f"{t2}|{t1}")
+            break
+
+    if s1 is None:
+        is_live = False
+        if match_data:
+            ht = match_data.get("ht")
+            g1 = match_data.get("goals1") or []
+            g2 = match_data.get("goals2") or []
+            if ht is not None or g1 or g2:
+                is_live = True
+        return False, None, None, None, None, is_live
+
+    p = match_data.get("p") if match_data else None
+    et = match_data.get("et") if match_data else None
+    s1_ft, s2_ft = (s2, s1) if reversed_key else (s1, s2)
+
+    if p is not None:
+        s1_p, s2_p = (p[1], p[0]) if reversed_key else (p[0], p[1])
+        winner = t1 if s1_p > s2_p else t2
+        return True, winner, f"{s1_ft}\u2013{s2_ft} ({s1_p}\u2013{s2_p} pen)", s1, s2, False
+    elif et is not None:
+        s1_et, s2_et = (et[1], et[0]) if reversed_key else (et[0], et[1])
+        winner = t1 if s1_et > s2_et else t2
+        return True, winner, f"{s1_et}\u2013{s2_et} AET", s1, s2, False
+    elif s1_ft != s2_ft:
+        winner = t1 if s1_ft > s2_ft else t2
+        return True, winner, f"{s1_ft}\u2013{s2_ft}", s1, s2, False
+    else:
+        # Tied at full time, no ET/penalty data yet -- still pending, not finished
+        return False, None, f"{s1_ft}\u2013{s2_ft} (ET/pens pending)", s1, s2, True
+
+def get_bracket_data(live_scores):
+    # R32
+    r32 = {}
+    for m in WC_ROUND_OF_32:
+        slot = m["slot"]
+        t1, t2 = m["team1"], m["team2"]
+        is_finished, winner, score_str, s1, s2, is_live = _resolve_match(t1, t2, live_scores)
+
+        r32[slot] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": is_live,
+            "score_str": score_str,
+            "date": m["date"],
+            "venue": m["venue"],
+            "city": m["city"]
+        }
+        
+    # R16
+    r16_slots = {
+        "R16_1": ("M3", "M6"),
+        "R16_2": ("M1", "M4"),
+        "R16_3": ("M13", "M11"),
+        "R16_4": ("M10", "M9"),
+        "R16_5": ("M2", "M5"),
+        "R16_6": ("M7", "M8"),
+        "R16_7": ("M15", "M14"),
+        "R16_8": ("M12", "M16"),
+    }
+    
+    r16 = {}
+    for slot_id, (feed_a, feed_b) in r16_slots.items():
+        fa, fb = r32[feed_a], r32[feed_b]
+        t1 = fa["winner"] if fa["is_finished"] else None
+        t2 = fb["winner"] if fb["is_finished"] else None
+
+        is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
+        if t1 and t2:
+            is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+        # Show the real "Team A or Team B" options from the feeder match instead
+        # of a generic placeholder, since both candidates are already known.
+        label1 = f"{fa['team1']} or {fa['team2']}" if not fa["is_finished"] else _pretty_feed_label(feed_a)
+        label2 = f"{fb['team1']} or {fb['team2']}" if not fb["is_finished"] else _pretty_feed_label(feed_b)
+
+        r16[slot_id] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": False,
+            "score_str": score_str,
+            "label1": label1,
+            "label2": label2
+        }
+        
+    # QF
+    qf_slots = {
+        "QF_1": ("R16_1", "R16_2"),
+        "QF_2": ("R16_3", "R16_4"),
+        "QF_3": ("R16_5", "R16_6"),
+        "QF_4": ("R16_7", "R16_8"),
+    }
+    
+    qf = {}
+    for slot_id, (feed_a, feed_b) in qf_slots.items():
+        fa, fb = r16[feed_a], r16[feed_b]
+        t1 = fa["winner"] if fa["is_finished"] else None
+        t2 = fb["winner"] if fb["is_finished"] else None
+
+        is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
+        if t1 and t2:
+            is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+        qf[slot_id] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": False,
+            "score_str": score_str,
+            "label1": _pretty_feed_label(feed_a),
+            "label2": _pretty_feed_label(feed_b)
+        }
+        
+    # SF
+    sf_slots = {
+        "SF_1": ("QF_1", "QF_2"),
+        "SF_2": ("QF_3", "QF_4"),
+    }
+    
+    sf = {}
+    for slot_id, (feed_a, feed_b) in sf_slots.items():
+        fa, fb = qf[feed_a], qf[feed_b]
+        t1 = fa["winner"] if fa["is_finished"] else None
+        t2 = fb["winner"] if fb["is_finished"] else None
+
+        is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
+        if t1 and t2:
+            is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+        sf[slot_id] = {
+            "team1": t1,
+            "team2": t2,
+            "score1": s1,
+            "score2": s2,
+            "winner": winner,
+            "is_finished": is_finished,
+            "is_live": False,
+            "score_str": score_str,
+            "label1": _pretty_feed_label(feed_a),
+            "label2": _pretty_feed_label(feed_b)
+        }
+        
+    # Final
+    fa, fb = sf["SF_1"], sf["SF_2"]
+    t1 = fa["winner"] if fa["is_finished"] else None
+    t2 = fb["winner"] if fb["is_finished"] else None
+
+    is_finished, winner, score_str, s1, s2, _ = (False, None, None, None, None, False)
+    if t1 and t2:
+        is_finished, winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+    final = {
+        "team1": t1,
+        "team2": t2,
+        "score1": s1,
+        "score2": s2,
+        "winner": winner,
+        "is_finished": is_finished,
+        "is_live": False,
+        "score_str": score_str,
+        "label1": _pretty_feed_label("SF1"),
+        "label2": _pretty_feed_label("SF2")
+    }
+    
+    return {
+        "r32": r32,
+        "r16": r16,
+        "qf": qf,
+        "sf": sf,
+        "final": {"FINAL": final},
+        "champion": winner if is_finished else None
+    }
+
+def render_bracket_tree(live_scores):
+    # Fetch data
+    bracket_data = get_bracket_data(live_scores)
+    
+    # CSS Styles for Grid and Connectors
+    st.markdown("""
+<style>
+.bracket-wrapper {
+  overflow-x: auto;
+  padding: 28px 16px;
+  background: #030c03;
+  border-radius: 16px;
+  border: 1px solid rgba(74, 222, 128, 0.12);
+  margin-bottom: 30px;
+}
+.bracket-grid {
+  display: grid;
+  grid-template-columns: 112px 14px 112px 14px 112px 14px 112px 14px 132px 14px 112px 14px 112px 14px 112px 14px 112px;
+  grid-template-rows: repeat(15, 66px);
+  gap: 0;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 1140px;
+  margin: 0 auto;
+}
+.bracket-box {
+  background: rgba(8, 28, 8, 0.85);
+  border: 1px solid rgba(74, 222, 128, 0.18);
+  border-radius: 8px;
+  padding: 7px 10px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  height: 56px;
+  font-size: 0.92rem;
+  box-shadow: 0 4px 6px rgba(0,0,0,0.15);
+  transition: all 0.2s ease-in-out;
+  box-sizing: border-box;
+}
+.bracket-box:hover {
+  border-color: rgba(74, 222, 128, 0.4);
+  transform: scale(1.03);
+  z-index: 5;
+}
+.bracket-box.live {
+  border-color: rgba(239, 68, 68, 0.5);
+  background: rgba(40, 5, 5, 0.85);
+  box-shadow: 0 0 12px rgba(239,68,68,0.2);
+}
+.bracket-box.empty {
+  background: rgba(5, 15, 5, 0.5);
+  border: 1px dashed rgba(74, 222, 128, 0.1);
+}
+.team-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  line-height: 1.35;
+  font-weight: 600;
+}
+.team-row.placeholder {
+  color: rgba(134, 239, 172, 0.65);
+  font-style: italic;
+  font-size: 0.74rem;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+.team-row.placeholder::before {
+  content: "›";
+  margin-right: 5px;
+  color: rgba(251, 191, 36, 0.6);
+  font-style: normal;
+  font-weight: 800;
+}
+.team-row.winner {
+  font-weight: 800;
+  color: #f0fdf4;
+}
+.team-row.loser {
+  color: rgba(134, 239, 172, 0.45);
+  font-weight: 500;
+}
+.bracket-date {
+  font-size: 0.68rem;
+  color: rgba(134, 239, 172, 0.65);
+  text-align: center;
+  margin-top: 2px;
+  font-weight: 500;
+}
+.pulsing-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  background-color: #ef4444;
+  border-radius: 50%;
+  margin-left: 4px;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0% { transform: scale(0.9); opacity: 1; }
+  50% { transform: scale(1.2); opacity: 0.5; }
+  100% { transform: scale(0.9); opacity: 1; }
+}
+
+/* SF / FINAL — grand, elevated styling distinct from regular rounds */
+.bracket-box.grand-box {
+  height: 64px;
+  background: linear-gradient(145deg, rgba(40, 30, 6, 0.9), rgba(20, 16, 4, 0.95));
+  border: 1.5px solid rgba(251, 191, 36, 0.4);
+  box-shadow: 0 0 18px rgba(251, 191, 36, 0.12), 0 4px 10px rgba(0,0,0,0.3);
+}
+.bracket-box.grand-box:hover {
+  border-color: rgba(251, 191, 36, 0.65);
+  box-shadow: 0 0 24px rgba(251, 191, 36, 0.22), 0 4px 10px rgba(0,0,0,0.3);
+}
+.bracket-box.grand-box .team-row {
+  font-size: 0.98rem;
+}
+.bracket-box.grand-box .team-row.winner {
+  color: #fde68a;
+}
+.bracket-box.grand-box .team-row.placeholder {
+  color: rgba(251, 191, 36, 0.55);
+}
+.bracket-box.grand-box .team-row.placeholder::before {
+  color: rgba(251, 191, 36, 0.7);
+}
+
+.bracket-box.champion-box {
+  height: 64px;
+  background: linear-gradient(145deg, rgba(60, 44, 6, 0.95), rgba(251, 191, 36, 0.08));
+  border: 2px solid rgba(251, 191, 36, 0.55);
+  box-shadow: 0 0 26px rgba(251, 191, 36, 0.25), 0 4px 12px rgba(0,0,0,0.35);
+}
+.bracket-box.champion-box .team-row {
+  color: #fde68a;
+  font-weight: 800;
+  font-size: 1.02rem;
+  justify-content: center;
+}
+
+/* Connectors */
+.line-cell {
+  position: relative;
+  width: 100%;
+  height: 100%;
+}
+.line-left-top {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 50%;
+  height: 50%;
+  border-top: 2px solid rgba(74,222,128,0.3);
+  border-right: 2px solid rgba(74,222,128,0.3);
+}
+.line-left-bottom {
+  position: absolute;
+  bottom: 50%;
+  left: 0;
+  width: 50%;
+  height: 50%;
+  border-bottom: 2px solid rgba(74,222,128,0.3);
+  border-right: 2px solid rgba(74,222,128,0.3);
+}
+.line-left-mid {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 50%;
+  height: 0;
+  border-top: 2px solid rgba(74,222,128,0.3);
+}
+.line-left-vert {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 0;
+  border-left: 2px solid rgba(74,222,128,0.3);
+}
+.line-right-top {
+  position: absolute;
+  top: 50%;
+  right: 0;
+  width: 50%;
+  height: 50%;
+  border-top: 2px solid rgba(74,222,128,0.3);
+  border-left: 2px solid rgba(74,222,128,0.3);
+}
+.line-right-bottom {
+  position: absolute;
+  bottom: 50%;
+  right: 0;
+  width: 50%;
+  height: 50%;
+  border-bottom: 2px solid rgba(74,222,128,0.3);
+  border-left: 2px solid rgba(74,222,128,0.3);
+}
+.line-right-mid {
+  position: absolute;
+  top: 50%;
+  right: 50%;
+  width: 50%;
+  height: 0;
+  border-top: 2px solid rgba(74,222,128,0.3);
+}
+.line-right-vert {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  right: 50%;
+  width: 0;
+  border-right: 2px solid rgba(74,222,128,0.3);
+}
+.line-champion-vert {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 2px solid rgba(251,191,36,0.4);
+}
+
+/* Match Cards */
+.ko-card.right-glow {
+  border-color: rgba(74, 222, 128, 0.45) !important;
+  background: rgba(8, 36, 8, 0.95) !important;
+  box-shadow: 0 0 16px rgba(74, 222, 128, 0.15);
+}
+.ko-card.wrong-glow {
+  border-color: rgba(239, 68, 68, 0.4) !important;
+  background: rgba(24, 8, 8, 0.95) !important;
+  box-shadow: 0 0 16px rgba(239, 68, 68, 0.1);
+}
+</style>
+""", unsafe_allow_html=True)
+    
+    # Define grid cells
+    grid_cells = {}
+    
+    # Left Side Matches
+    grid_cells[(1, 1)] = ("match", "r32", "M3")
+    grid_cells[(1, 3)] = ("match", "r32", "M6")
+    grid_cells[(1, 5)] = ("match", "r32", "M1")
+    grid_cells[(1, 7)] = ("match", "r32", "M4")
+    grid_cells[(1, 9)] = ("match", "r32", "M13")
+    grid_cells[(1, 11)] = ("match", "r32", "M11")
+    grid_cells[(1, 13)] = ("match", "r32", "M10")
+    grid_cells[(1, 15)] = ("match", "r32", "M9")
+    
+    grid_cells[(3, 2)] = ("match", "r16", "R16_1")
+    grid_cells[(3, 6)] = ("match", "r16", "R16_2")
+    grid_cells[(3, 10)] = ("match", "r16", "R16_3")
+    grid_cells[(3, 14)] = ("match", "r16", "R16_4")
+    
+    grid_cells[(5, 4)] = ("match", "qf", "QF_1")
+    grid_cells[(5, 12)] = ("match", "qf", "QF_2")
+    
+    grid_cells[(7, 8)] = ("match", "sf", "SF_1")
+    
+    # Center Matches
+    grid_cells[(9, 8)] = ("match", "final", "FINAL")
+    grid_cells[(9, 6)] = ("champion", None, None)
+    
+    # Right Side Matches
+    grid_cells[(11, 8)] = ("match", "sf", "SF_2")
+    
+    grid_cells[(13, 4)] = ("match", "qf", "QF_3")
+    grid_cells[(13, 12)] = ("match", "qf", "QF_4")
+    
+    grid_cells[(15, 2)] = ("match", "r16", "R16_5")
+    grid_cells[(15, 6)] = ("match", "r16", "R16_6")
+    grid_cells[(15, 10)] = ("match", "r16", "R16_7")
+    grid_cells[(15, 14)] = ("match", "r16", "R16_8")
+    
+    grid_cells[(17, 1)] = ("match", "r32", "M2")
+    grid_cells[(17, 3)] = ("match", "r32", "M5")
+    grid_cells[(17, 5)] = ("match", "r32", "M7")
+    grid_cells[(17, 7)] = ("match", "r32", "M8")
+    grid_cells[(17, 9)] = ("match", "r32", "M15")
+    grid_cells[(17, 11)] = ("match", "r32", "M14")
+    grid_cells[(17, 13)] = ("match", "r32", "M12")
+    grid_cells[(17, 15)] = ("match", "r32", "M16")
+    
+    # Left Connectors
+    # Col 2
+    grid_cells[(2, 1)] = ("line-left-top", None, None)
+    grid_cells[(2, 2)] = ("line-left-join", None, None)
+    grid_cells[(2, 3)] = ("line-left-bottom", None, None)
+    grid_cells[(2, 5)] = ("line-left-top", None, None)
+    grid_cells[(2, 6)] = ("line-left-join", None, None)
+    grid_cells[(2, 7)] = ("line-left-bottom", None, None)
+    grid_cells[(2, 9)] = ("line-left-top", None, None)
+    grid_cells[(2, 10)] = ("line-left-join", None, None)
+    grid_cells[(2, 11)] = ("line-left-bottom", None, None)
+    grid_cells[(2, 13)] = ("line-left-top", None, None)
+    grid_cells[(2, 14)] = ("line-left-join", None, None)
+    grid_cells[(2, 15)] = ("line-left-bottom", None, None)
+    
+    # Col 4
+    grid_cells[(4, 2)] = ("line-left-top", None, None)
+    grid_cells[(4, 3)] = ("line-left-vert", None, None)
+    grid_cells[(4, 4)] = ("line-left-join", None, None)
+    grid_cells[(4, 5)] = ("line-left-vert", None, None)
+    grid_cells[(4, 6)] = ("line-left-bottom", None, None)
+    grid_cells[(4, 10)] = ("line-left-top", None, None)
+    grid_cells[(4, 11)] = ("line-left-vert", None, None)
+    grid_cells[(4, 12)] = ("line-left-join", None, None)
+    grid_cells[(4, 13)] = ("line-left-vert", None, None)
+    grid_cells[(4, 14)] = ("line-left-bottom", None, None)
+    
+    # Col 6
+    grid_cells[(6, 4)] = ("line-left-top", None, None)
+    for r in [5, 6, 7]: grid_cells[(6, r)] = ("line-left-vert", None, None)
+    grid_cells[(6, 8)] = ("line-left-join", None, None)
+    for r in [9, 10, 11]: grid_cells[(6, r)] = ("line-left-vert", None, None)
+    grid_cells[(6, 12)] = ("line-left-bottom", None, None)
+    
+    # Col 8
+    grid_cells[(8, 8)] = ("line-left-mid", None, None)
+    
+    # Col 9 vertical line between Final and Champion
+    grid_cells[(9, 7)] = ("line-champion-vert", None, None)
+    
+    # Col 10
+    grid_cells[(10, 8)] = ("line-right-mid", None, None)
+    
+    # Right Connectors
+    # Col 12
+    grid_cells[(12, 4)] = ("line-right-top", None, None)
+    for r in [5, 6, 7]: grid_cells[(12, r)] = ("line-right-vert", None, None)
+    grid_cells[(12, 8)] = ("line-right-join", None, None)
+    for r in [9, 10, 11]: grid_cells[(12, r)] = ("line-right-vert", None, None)
+    grid_cells[(12, 12)] = ("line-right-bottom", None, None)
+    
+    # Col 14
+    grid_cells[(14, 2)] = ("line-right-top", None, None)
+    grid_cells[(14, 3)] = ("line-right-vert", None, None)
+    grid_cells[(14, 4)] = ("line-right-join", None, None)
+    grid_cells[(14, 5)] = ("line-right-vert", None, None)
+    grid_cells[(14, 6)] = ("line-right-bottom", None, None)
+    grid_cells[(14, 10)] = ("line-right-top", None, None)
+    grid_cells[(14, 11)] = ("line-right-vert", None, None)
+    grid_cells[(14, 12)] = ("line-right-join", None, None)
+    grid_cells[(14, 13)] = ("line-right-vert", None, None)
+    grid_cells[(14, 14)] = ("line-right-bottom", None, None)
+    
+    # Col 16
+    grid_cells[(16, 1)] = ("line-right-top", None, None)
+    grid_cells[(16, 2)] = ("line-right-join", None, None)
+    grid_cells[(16, 3)] = ("line-right-bottom", None, None)
+    grid_cells[(16, 5)] = ("line-right-top", None, None)
+    grid_cells[(16, 6)] = ("line-right-join", None, None)
+    grid_cells[(16, 7)] = ("line-right-bottom", None, None)
+    grid_cells[(16, 9)] = ("line-right-top", None, None)
+    grid_cells[(16, 10)] = ("line-right-join", None, None)
+    grid_cells[(16, 11)] = ("line-right-bottom", None, None)
+    grid_cells[(16, 13)] = ("line-right-top", None, None)
+    grid_cells[(16, 14)] = ("line-right-join", None, None)
+    grid_cells[(16, 15)] = ("line-right-bottom", None, None)
+    
+    # Build HTML
+    html = []
+    html.append('<div class="bracket-wrapper">')
+    html.append('<div class="bracket-grid">')
+    
+    for (col, row), cell_info in grid_cells.items():
+        cell_type, round_name, slot_id = cell_info
+        
+        if cell_type == "match":
+            match_data = bracket_data[round_name][slot_id]
+            t1, t2 = match_data["team1"], match_data["team2"]
+            s1, s2 = match_data["score1"], match_data["score2"]
+            winner = match_data["winner"]
+            is_finished = match_data["is_finished"]
+            is_live = match_data["is_live"]
+            
+            box_class = "bracket-box"
+            if round_name in ("sf", "final"):
+                box_class += " grand-box"
+            if is_live:
+                box_class += " live"
+            
+            if t1 is None or t2 is None:
+                box_class += " empty"
+
+            if t1 is None and t2 is None:
+                t1_html = f'<div class="team-row placeholder">{match_data.get("label1", "TBD")}</div>'
+                t2_html = f'<div class="team-row placeholder">{match_data.get("label2", "TBD")}</div>'
+                date_html = ""
+            else:
+                flag1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽") if t1 else ""
+                flag2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽") if t2 else ""
+
+                t1_cls = "team-row"
+                t2_cls = "team-row"
+                s1_h = ""
+                s2_h = ""
+
+                if is_finished:
+                    if winner == t1:
+                        t1_cls += " winner"
+                        t2_cls += " loser"
+                    elif winner == t2:
+                        t1_cls += " loser"
+                        t2_cls += " winner"
+                    s1_h = f"<b>{s1}</b>"
+                    s2_h = f"<b>{s2}</b>"
+                elif is_live:
+                    s1_h = f"<b>{s1 if s1 is not None else 0}</b>"
+                    s2_h = f"<b>{s2 if s2 is not None else 0}</b>"
+
+                if t1 is not None:
+                    c1 = TEAM_COLORS.get(NATION_TO_CODE.get(t1, ""), "rgba(74,222,128,0.3)")
+                    t1_disp = f'{flag1} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t1}</span>'
+                    t1_html = f'<div class="{t1_cls}" style="border-left: 3px solid {c1}; padding-left: 6px; border-radius: 2px;">{t1_disp} {s1_h}</div>'
+                else:
+                    t1_html = f'<div class="team-row placeholder">{match_data.get("label1", "TBD")}</div>'
+
+                if t2 is not None:
+                    c2 = TEAM_COLORS.get(NATION_TO_CODE.get(t2, ""), "rgba(74,222,128,0.3)")
+                    t2_disp = f'{flag2} <span style="display: inline-block; max-width: 74px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle;">{t2}</span>'
+                    t2_html = f'<div class="{t2_cls}" style="border-left: 3px solid {c2}; padding-left: 6px; border-radius: 2px;">{t2_disp} {s2_h}</div>'
+                else:
+                    t2_html = f'<div class="team-row placeholder">{match_data.get("label2", "TBD")}</div>'
+
+                date_val = match_data.get("date", "")
+                if round_name == "r32" and date_val:
+                    date_html = f'<div class="bracket-date">{date_val}</div>'
+                else:
+                    date_html = ""
+            
+            live_dot = ' <span class="pulsing-dot"></span>' if is_live else ""
+            if round_name == "r32":
+                _slot_display = slot_id
+            elif round_name == "r16":
+                _slot_display = f"R16 · {slot_id.split('_')[1]}"
+            elif round_name == "qf":
+                _slot_display = f"QF {slot_id.split('_')[1]}"
+            elif round_name == "sf":
+                _slot_display = f"SF {slot_id.split('_')[1]}"
+            elif round_name == "final":
+                _slot_display = "FINAL"
+            else:
+                _slot_display = slot_id
+            slot_label = f'<div style="font-size:0.5rem;color:rgba(74,222,128,0.4);font-weight:700;margin-bottom:2px;display:flex;justify-content:space-between;align-items:center;letter-spacing:0.04em;text-transform:uppercase;"><span>{_slot_display}</span>{live_dot}</div>'
+            
+            html.append(f'<div class="{box_class}" style="grid-column: {col}; grid-row: {row};">')
+            html.append(slot_label)
+            html.append(t1_html)
+            html.append(t2_html)
+            html.append(date_html)
+            html.append('</div>')
+            
+        elif cell_type == "champion":
+            champ = bracket_data["champion"]
+            if champ:
+                flag = FLAGS.get(NATION_TO_CODE.get(champ, ""), "⚽")
+                html.append(f'''<div class="bracket-box champion-box" style="grid-column: {col}; grid-row: {row};">
+                    <div style="font-size:0.55rem;color:#fbbf24;text-transform:uppercase;letter-spacing:0.1em;text-align:center;font-weight:700;margin-bottom:2px;">🏆 CHAMPION 🏆</div>
+                    <div class="team-row" style="color:#fbbf24;font-weight:800;font-size:0.85rem;justify-content:center;">
+                        {flag} &nbsp; {champ}
+                    </div>
+                </div>''')
+            else:
+                html.append(f'''<div class="bracket-box champion-box empty" style="grid-column: {col}; grid-row: {row}; border: 1px dashed rgba(251, 191, 36, 0.2); background: rgba(251,191,36,0.02);">
+                    <div style="font-size:0.55rem;color:rgba(251,191,36,0.5);text-transform:uppercase;letter-spacing:0.1em;text-align:center;font-weight:700;margin-bottom:2px;">🏆 CHAMPION 🏆</div>
+                    <div class="team-row placeholder" style="color:rgba(251,191,36,0.4);font-size:0.75rem;justify-content:center;font-style:italic;">
+                        TBD
+                    </div>
+                </div>''')
+                
+        elif cell_type.startswith("line-"):
+            inner_class = cell_type
+            html.append(f'<div style="grid-column: {col}; grid-row: {row}; width:100%; height:100%;">')
+            html.append('<div class="line-cell">')
+            
+            if cell_type == "line-left-join":
+                html.append('<div class="line-left-vert"></div><div class="line-left-mid"></div>')
+            elif cell_type == "line-right-join":
+                html.append('<div class="line-right-vert"></div><div class="line-right-mid"></div>')
+            else:
+                html.append(f'<div class="{inner_class}"></div>')
+                
+            html.append('</div>')
+            html.append('</div>')
+            
+    html.append('</div>')
+    html.append('</div>')
+    
+    st.markdown("".join(html), unsafe_allow_html=True)
+
+def _render_knockout_card(col, t1, t2, slot_label, round_title, meta_html, live_scores):
+    """Renders one prediction/result card for a single real matchup
+    (used for R32, and for R16/QF/SF/Final once both teams are confirmed)."""
+    f1 = FLAGS.get(NATION_TO_CODE.get(t1, ""), "⚽")
+    f2 = FLAGS.get(NATION_TO_CODE.get(t2, ""), "⚽")
+
+    pred_w, adj1, adj2 = knockout_predict(t1, t2)
+    wpct = adj1 if pred_w == t1 else adj2
+
+    is_finished, act_winner, score_str, s1, s2, _ = _resolve_match(t1, t2, live_scores)
+
+    if is_finished:
+        is_correct = (act_winner == pred_w)
+        glow_class = "right-glow" if is_correct else "wrong-glow"
+        badge_html = f'<div class="ko-badge actual">{"✅ Right Prediction" if is_correct else "❌ Wrong Prediction"}</div>'
+
+        score_main = score_str
+        details = ""
+        if " " in score_str:
+            score_main, details = score_str.split(" ", 1)
+        score_parts = score_main.split("\u2013")
+        s1_part = score_parts[0]
+        s2_part = score_parts[1] if len(score_parts) > 1 else ""
+        details_html = f'<div style="font-size:0.9rem;color:#86efac;margin-top:2px;">{details}</div>' if details else ""
+
+        score_html = (
+            f'<div class="ko-score" style="margin-bottom:8px;">{f1} {s1_part} '
+            f'<span style="color:#4b7c4b;">\u2013</span> '
+            f'{s2_part} {f2}</div>'
+            f'{details_html}'
+        )
+    else:
+        act_winner = None
+        glow_class = ""
+        badge_html = f'<div class="ko-badge">Predicted: {f1 if pred_w==t1 else f2} {pred_w} {wpct}%</div>'
+        score_html = ""
+
+    t1_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t1 else ""
+    t2_bold = "font-weight:800;color:#4ade80;" if is_finished and act_winner == t2 else ""
+    c1 = TEAM_COLORS.get(NATION_TO_CODE.get(t1, ""), "rgba(74,222,128,0.3)")
+    c2 = TEAM_COLORS.get(NATION_TO_CODE.get(t2, ""), "rgba(74,222,128,0.3)")
+
+    card_html = clean_html(f'''
+    <div class="ko-card {glow_class}">
+        <div class="ko-slot">{slot_label} \u00b7 {round_title}</div>
+        <div class="ko-teams">
+            <span style="{t1_bold} border-left:3px solid {c1}; padding-left:6px; border-radius:2px;">{f1} {t1}</span>
+            <span style="color:#4b7c4b;font-size:0.85rem;padding:0 8px;">vs</span>
+            <span style="{t2_bold} border-left:3px solid {c2}; padding-left:6px; border-radius:2px;">{f2} {t2}</span>
+        </div>
+        {meta_html}
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px;">
+            <div class="star-box" style="padding:10px 14px;">
+                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f1} {t1}</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj1}%</div>
+                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj1}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+            </div>
+            <div class="star-box" style="padding:10px 14px;">
+                <div style="font-size:0.75rem;color:#86efac;margin-bottom:4px;">{f2} {t2}</div>
+                <div style="font-size:1.4rem;font-weight:800;color:#4ade80;">{adj2}%</div>
+                <div class="prob-bar-wrap"><div class="prob-bar-fill" style="width:{adj2}%;background:linear-gradient(90deg,#4ade80,#22c55e);"></div></div>
+            </div>
+        </div>
+        {score_html}
+        {badge_html}
+    </div>''')
+
+    with col:
+        st.markdown(card_html, unsafe_allow_html=True)
+
+def render_match_cards(live_scores, bracket_data):
+    st.markdown("### \u2694\ufe0f Round of 32 \u2014 All 16 Matches")
+    st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">Detailed model predictions and actual knockout results</p>', unsafe_allow_html=True)
+
+    cols = st.columns(2)
+    for idx, match in enumerate(WC_ROUND_OF_32):
+        meta_html = f'<div class="ko-meta">\U0001F4C5 {match["date"]} \u00b7 \U0001F3DF\ufe0f {match["venue"]} \u00b7 \U0001F4CD {match["city"]}</div>'
+        _render_knockout_card(cols[idx % 2], match["team1"], match["team2"], match["slot"], "Round of 32", meta_html, live_scores)
+
+    # Show prediction cards for later rounds ONLY once both teams in that
+    # matchup are actually confirmed -- never speculating multiple rounds
+    # ahead, just keeping pace with rounds as they become real.
+    round_defs = [
+        ("r16", "Round of 16", ["R16_1","R16_2","R16_3","R16_4","R16_5","R16_6","R16_7","R16_8"]),
+        ("qf", "Quarterfinals", ["QF_1","QF_2","QF_3","QF_4"]),
+        ("sf", "Semifinals", ["SF_1","SF_2"]),
+        ("final", "Final", ["FINAL"]),
+    ]
+    for round_key, round_title, slot_ids in round_defs:
+        live_slots = [sid for sid in slot_ids if bracket_data[round_key][sid]["team1"] and bracket_data[round_key][sid]["team2"]]
+        if not live_slots:
+            continue
+        st.markdown("---")
+        st.markdown(f"### \u2694\ufe0f {round_title} \u2014 {len(live_slots)} Match{'es' if len(live_slots)!=1 else ''} Confirmed")
+        st.markdown('<p class="page-sub" style="margin-top:-12px;margin-bottom:16px;">Updates automatically as earlier rounds are decided</p>', unsafe_allow_html=True)
+        rcols = st.columns(2)
+        for i, slot_id in enumerate(live_slots):
+            m = bracket_data[round_key][slot_id]
+            slot_display = "FINAL" if round_key == "final" else f"{round_title.split()[0]} {slot_id.split('_')[1]}" if "_" in slot_id else slot_id
+            _render_knockout_card(rcols[i % 2], m["team1"], m["team2"], slot_display, round_title, "", live_scores)
+
+
+
 def get_squad(team):
     code = NATION_TO_CODE.get(team,"")
     if not code: return pd.DataFrame()
     return df[df["Nation"]==code].sort_values("Overall_Index",ascending=False)
 
 # ── HORIZONTAL TAB NAVIGATION ─────────────────────────────────────────────
-tab_mi, tab_sched, tab_nat = st.tabs([
+tab_mi, tab_sched, tab_nat, tab_bracket = st.tabs([
     "🔥 Match Intelligence",
     "📅 Schedule",
     "🌍 Nations & Players",
+    "🏆 Knockout Bracket",
 ])
 
 # ════════════════════════════════════════════════════════════════════════════
@@ -776,8 +1693,8 @@ with tab_mi:
 # TAB 2 — SCHEDULE
 # ════════════════════════════════════════════════════════════════════════════
 with tab_sched:
-    st.markdown('<p class="page-title">📅 Full Tournament Schedule</p>', unsafe_allow_html=True)
-    st.markdown('<p class="page-sub">All matches · Group Stage through the Final · July 19, 2026</p>', unsafe_allow_html=True)
+    st.markdown('<p class="page-title">📅 Full Group Stage Schedule</p>', unsafe_allow_html=True)
+    st.markdown('<p class="page-sub">All 72 group stage matches · June 11 – June 25, 2026 · USA, Mexico & Canada</p>', unsafe_allow_html=True)
     # Load live scores
     live_scores = fetch_live_scores()
     # Countdown timer
@@ -847,7 +1764,93 @@ with tab_sched:
         st.markdown(clean_html(html),unsafe_allow_html=True)
 
 # ════════════════════════════════════════════════════════════════════════════
-# TAB 3 — WC WATCHLIST
+# TAB 3 — KNOCKOUT BRACKET
+# ════════════════════════════════════════════════════════════════════════════
+with tab_bracket:
+    # Helper to find the next upcoming knockout match (Round of 32)
+    def _next_ko_match(ko_live):
+        """
+        Return the current or next knockout match.
+        Only skips a match once the API confirms a final score.
+        No time-based skipping — avoids false 'All R32 complete' during live matches.
+        """
+        for m in sorted(WC_ROUND_OF_32, key=_parse_ko_date_utc):
+            s1, s2, _, _ = get_match_score(m["team1"], m["team2"], ko_live)
+            if s1 is None:
+                return m
+        return None
+    st.markdown('<p class="page-title">🏆 Knockout Bracket</p>', unsafe_allow_html=True)
+    st.markdown('<p class="page-sub">Follow the visual bracket tree and explore predicted matchups vs actual results.</p>', unsafe_allow_html=True)
+    
+    ko_live = fetch_live_scores()
+    next_ko = _next_ko_match(ko_live)
+    
+    # Next Up hero countdown
+    if next_ko:
+        nk_t1, nk_t2 = next_ko["team1"], next_ko["team2"]
+        nk_f1, nk_f2 = _ko_flag(nk_t1), _ko_flag(nk_t2)
+        nk_pred, nk_adj1, nk_adj2 = knockout_predict(nk_t1, nk_t2)
+        nk_wflag = nk_f1 if nk_pred == nk_t1 else nk_f2
+        nk_wpct = nk_adj1 if nk_pred == nk_t1 else nk_adj2
+        kickoff_dt = _parse_ko_date_utc(next_ko)
+        nk_ts = int(kickoff_dt.timestamp() * 1000)
+        nk_hero = (
+            "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
+            "<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));"
+            "border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;text-align:center;'>"
+            "<div id='ko-label' style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;"
+            "letter-spacing:0.22em;font-weight:700;margin-bottom:8px;'>Next Up · Round of 32</div>"
+            f"<div style='font-size:1.5rem;font-weight:900;color:#f0fdf4;margin-bottom:4px;'>"
+            f"{nk_f1} {nk_t1} <span style='color:#4b7c4b;font-size:1rem;padding:0 8px;'>vs</span> "
+            f"{nk_t2} {nk_f2}</div>"
+            f"<div style='font-size:0.72rem;color:#86efac;margin-bottom:8px;'>"
+            f"{next_ko['slot']} · {next_ko['date']} · {next_ko.get('time','')} · {next_ko['venue']} · {next_ko['city']}</div>"
+            f"<div style='font-size:0.85rem;color:#fbbf24;font-weight:700;margin-bottom:10px;'>"
+            f"Predicted: {nk_wflag} {nk_pred} {nk_wpct}%</div>"
+            "<div id='ko-timer' style='font-size:2.2rem;font-weight:900;color:#fbbf24;"
+            "font-variant-numeric:tabular-nums;'>--</div>"
+            "</div>"
+            f"<script>"
+            f"(function(){{"
+            f"var t={nk_ts};"
+            f"var el=document.getElementById('ko-timer');"
+            f"var lbl=document.getElementById('ko-label');"
+            f"function tick(){{"
+            f"var d=t-Date.now();"
+            f"if(d<=0){{"
+            f"lbl.textContent='🔴 Live Now · Round of 32';"
+            f"el.textContent='🔴 In Progress';"
+            f"el.style.fontSize='1.4rem';"
+            f"return;"
+            f"}}"
+            f"lbl.textContent='Next Up · Round of 32';"
+            f"var hrs=Math.floor(d/3600000);"
+            f"var mins=Math.floor((d%3600000)/60000);"
+            f"var secs=Math.floor((d%60000)/1000);"
+            f"el.textContent=hrs+'h '+mins+'m '+secs+'s';}}"
+            f"tick();setInterval(tick,1000);}})();"
+            f"</script>"
+            "</body></html>"
+        )
+        _nk_b64 = base64.b64encode(nk_hero.encode("utf-8")).decode()
+        st.markdown(f'<iframe src="data:text/html;charset=utf-8;base64,{_nk_b64}" height="160" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
+    else:
+        st.markdown(clean_html('''
+        <div style="background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));
+        border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;
+        text-align:center;margin-bottom:16px;">
+        <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;
+        letter-spacing:0.22em;font-weight:700;margin-bottom:8px;">Round of 32 Complete</div>
+        <div style="font-size:1.2rem;font-weight:800;color:#f0fdf4;">All Round of 32 matches played — follow the bracket below</div>
+        </div>'''), unsafe_allow_html=True)
+        
+    st.markdown("### 🗺️ Visual Bracket Tree")
+    render_bracket_tree(ko_live)
+    
+    render_match_cards(ko_live, get_bracket_data(ko_live))
+
+# ════════════════════════════════════════════════════════════════════════════
+# TAB 4 — WC WATCHLIST
 # ════════════════════════════════════════════════════════════════════════════
 with tab_nat:  # WC Watchlist section
     st.markdown('<p class="page-title">📋 World Cup Watchlist</p>', unsafe_allow_html=True)
@@ -1092,3 +2095,4 @@ st.markdown("""
     </div>
 </div>
 """, unsafe_allow_html=True)
+# cache bust Wed Jul  1 14:57:09 UTC 2026
