@@ -242,6 +242,40 @@ WC_SCHEDULE = [
     {"group":"L","team1":"Panama","team2":"Croatia","date":"Jun 23","time":"7:00 PM ET","venue":"BMO Field","city":"Toronto"},
     {"group":"L","team1":"Panama","team2":"England","date":"Jun 27","time":"5:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
     {"group":"L","team1":"Croatia","team2":"Ghana","date":"Jun 27","time":"5:00 PM ET","venue":"Lincoln Financial Field","city":"Philadelphia"},
+    # ── ROUND OF 32 ───────────────────────────────────────────────────────
+    {"group":"R32","team1":"South Africa","team2":"Canada","date":"Jun 28","time":"3:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
+    {"group":"R32","team1":"Germany","team2":"Paraguay","date":"Jun 29","time":"3:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
+    {"group":"R32","team1":"Netherlands","team2":"Morocco","date":"Jun 29","time":"6:00 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
+    {"group":"R32","team1":"Brazil","team2":"Japan","date":"Jun 29","time":"9:00 PM ET","venue":"NRG Stadium","city":"Houston"},
+    {"group":"R32","team1":"England","team2":"Congo DR","date":"Jul 1","time":"3:00 PM ET","venue":"Gillette Stadium","city":"Boston"},
+    {"group":"R32","team1":"United States","team2":"Bosnia-Herzegovina","date":"Jul 1","time":"6:00 PM ET","venue":"Levi's Stadium","city":"San Francisco"},
+    {"group":"R32","team1":"Belgium","team2":"Senegal","date":"Jul 1","time":"9:00 PM ET","venue":"BC Place","city":"Vancouver"},
+    {"group":"R32","team1":"Portugal","team2":"Croatia","date":"Jul 2","time":"3:00 PM ET","venue":"BMO Field","city":"Toronto"},
+    {"group":"R32","team1":"Spain","team2":"Austria","date":"Jul 2","time":"6:00 PM ET","venue":"Mercedes-Benz Stadium","city":"Atlanta"},
+    {"group":"R32","team1":"Switzerland","team2":"Algeria","date":"Jul 2","time":"9:00 PM ET","venue":"Lumen Field","city":"Seattle"},
+    {"group":"R32","team1":"Argentina","team2":"Cape Verde","date":"Jul 3","time":"3:00 PM ET","venue":"Arrowhead Stadium","city":"Kansas City"},
+    {"group":"R32","team1":"Colombia","team2":"Ghana","date":"Jul 3","time":"6:00 PM ET","venue":"Lincoln Financial Field","city":"Philadelphia"},
+    {"group":"R32","team1":"Australia","team2":"Egypt","date":"Jul 3","time":"9:00 PM ET","venue":"SoFi Stadium","city":"Los Angeles"},
+    {"group":"R32","team1":"Paraguay","team2":"France","date":"Jul 4","time":"3:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
+    {"group":"R32","team1":"Canada","team2":"Morocco","date":"Jul 4","time":"6:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
+    # ── QUARTER FINALS ────────────────────────────────────────────────────
+    {"group":"QF","team1":"Brazil","team2":"Norway","date":"Jul 5","time":"3:00 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
+    {"group":"QF","team1":"Mexico","team2":"England","date":"Jul 5","time":"9:00 PM ET","venue":"NRG Stadium","city":"Houston"},
+    {"group":"QF","team1":"Portugal","team2":"Spain","date":"Jul 6","time":"3:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
+    {"group":"QF","team1":"United States","team2":"Belgium","date":"Jul 6","time":"9:00 PM ET","venue":"SoFi Stadium","city":"Los Angeles"},
+    {"group":"QF","team1":"Argentina","team2":"Egypt","date":"Jul 7","time":"3:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
+    {"group":"QF","team1":"Switzerland","team2":"Colombia","date":"Jul 7","time":"9:00 PM ET","venue":"Levi's Stadium","city":"San Francisco"},
+    # ── SEMI FINALS ───────────────────────────────────────────────────────
+    {"group":"SF","team1":"France","team2":"Morocco","date":"Jul 9","time":"8:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
+    {"group":"SF","team1":"Spain","team2":"Belgium","date":"Jul 10","time":"8:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
+    {"group":"SF","team1":"Norway","team2":"England","date":"Jul 11","time":"8:00 PM ET","venue":"SoFi Stadium","city":"Los Angeles"},
+    {"group":"SF","team1":"Argentina","team2":"Switzerland","date":"Jul 11","time":"8:00 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
+    # ── SEMI FINALS REMAINING ─────────────────────────────────────────────
+    {"group":"SF","team1":"France","team2":"Spain","date":"Jul 14","time":"8:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
+    {"group":"SF","team1":"England","team2":"Argentina","date":"Jul 15","time":"8:00 PM ET","venue":"AT&T Stadium","city":"Dallas"},
+    # ── THIRD PLACE & FINAL ───────────────────────────────────────────────
+    {"group":"3PL","team1":"3rd Place Match","team2":"TBD","date":"Jul 18","time":"8:00 PM ET","venue":"Hard Rock Stadium","city":"Miami"},
+    {"group":"FIN","team1":"World Cup Final","team2":"TBD","date":"Jul 19","time":"8:00 PM ET","venue":"MetLife Stadium","city":"New York/NJ"},
 ]
 
 # ── ROUND OF 32 (locked tournament bracket) ─────────────────────────────────
@@ -1657,8 +1691,8 @@ with tab_mi:
 # TAB 2 — SCHEDULE
 # ════════════════════════════════════════════════════════════════════════════
 with tab_sched:
-    st.markdown('<p class="page-title">📅 Full Group Stage Schedule</p>', unsafe_allow_html=True)
-    st.markdown('<p class="page-sub">All 72 group stage matches · June 11 – June 25, 2026 · USA, Mexico & Canada</p>', unsafe_allow_html=True)
+    st.markdown('<p class="page-title">📅 Full Tournament Schedule</p>', unsafe_allow_html=True)
+    st.markdown('<p class="page-sub">All matches · Group Stage through the Final · July 19, 2026</p>', unsafe_allow_html=True)
     # Load live scores
     live_scores = fetch_live_scores()
     # Countdown timer
