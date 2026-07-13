@@ -532,36 +532,17 @@ if _bm:
     _ft1 = FLAGS.get(NATION_TO_CODE.get(_bm["team1"],""),"")
     _ft2 = FLAGS.get(NATION_TO_CODE.get(_bm["team2"],""),"")
     if _live_m:
-        # Show LIVE banner
         st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(40,5,5,0.97),rgba(20,2,2,0.99));border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:20px 32px;margin-bottom:12px;text-align:center;">
             <div style="font-size:0.68rem;color:#ef4444;text-transform:uppercase;letter-spacing:0.25em;font-weight:700;margin-bottom:8px;">🔴 &nbsp; Live Now</div>
             <div style="font-size:1.6rem;font-weight:900;color:#f0fdf4;">{_ft1} {_bm["team1"]} <span style="color:#5a2020;font-size:1rem;padding:0 10px;">vs</span> {_bm["team2"]} {_ft2}</div>
             <div style="font-size:0.75rem;color:#fca5a5;margin-top:8px;">{_bm.get("venue","")} &nbsp;·&nbsp; {_bm.get("city","")} &nbsp;·&nbsp; {_bm.get("time","")}</div>
         </div>'''), unsafe_allow_html=True)
     else:
-        # Show next match countdown
-        try:
-            _ts2 = _re_hero.search(r"(\d+):(\d+)\s*(AM|PM)", _bm.get("time",""))
-            if _ts2:
-                _h2=int(_ts2.group(1)); _m2=int(_ts2.group(2)); _a2=_ts2.group(3)
-                if _a2=="PM" and _h2!=12: _h2+=12
-                if _a2=="AM" and _h2==12: _h2=0
-                _dp2=_bm["date"].split("-")
-                _tms=int((datetime(int(_dp2[0]),int(_dp2[1]),int(_dp2[2]),_h2,_m2,0,tzinfo=timezone.utc)+_td(hours=5)).timestamp()*1000)
-            else: _tms=0
-        except: _tms=0
-        _hero_html = (
-            "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
-            "<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;text-align:center;'>"
-            "<div style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.22em;font-weight:700;margin-bottom:8px;'>Next Match</div>"
-            f"<div style='font-size:1.5rem;font-weight:900;color:#f0fdf4;margin-bottom:4px;'>{_ft1} {_bm['team1']} <span style='color:#4b7c4b;font-size:1rem;padding:0 8px;'>vs</span> {_bm['team2']} {_ft2}</div>"
-            f"<div style='font-size:0.72rem;color:#86efac;margin-bottom:12px;'>{_bm['date']} &nbsp;·&nbsp; {_bm['time']} &nbsp;·&nbsp; {_bm['city']}</div>"
-            "<div id='hero-timer' style='font-size:2.2rem;font-weight:900;color:#fbbf24;font-variant-numeric:tabular-nums;'>--</div>"
-            "</div>"
-            "</body></html>"
-        )
-        _hero_b64 = base64.b64encode(_hero_html.encode("utf-8")).decode()
-        st.markdown(f'<iframe src="data:text/html;charset=utf-8;base64,{_hero_b64}" height="90" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
+        st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:18px 32px;margin-bottom:12px;text-align:center;">
+            <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.22em;font-weight:700;margin-bottom:8px;">Next Match</div>
+            <div style="font-size:1.5rem;font-weight:900;color:#f0fdf4;">{_ft1} {_bm["team1"]} <span style="color:#4b7c4b;font-size:1rem;padding:0 8px;">vs</span> {_bm["team2"]} {_ft2}</div>
+            <div style="font-size:0.72rem;color:#86efac;margin-top:6px;">{_bm.get("date","")} &nbsp;·&nbsp; {_bm.get("time","")} &nbsp;·&nbsp; {_bm.get("city","")}</div>
+        </div>'''), unsafe_allow_html=True)
 
 # ── LOAD DATA ─────────────────────────────────────────────────────────────
 @st.cache_data
