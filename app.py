@@ -1835,14 +1835,74 @@ with tab_bracket:
         _nk_b64 = base64.b64encode(nk_hero.encode("utf-8")).decode()
         st.markdown(f'<iframe src="data:text/html;charset=utf-8;base64,{_nk_b64}" height="160" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
     else:
-        st.markdown(clean_html('''
-        <div style="background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));
-        border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;
-        text-align:center;margin-bottom:16px;">
-        <div style="font-size:0.65rem;color:#4ade80;text-transform:uppercase;
-        letter-spacing:0.22em;font-weight:700;margin-bottom:8px;">Round of 32 Complete</div>
-        <div style="font-size:1.2rem;font-weight:800;color:#f0fdf4;">All Round of 32 matches played — follow the bracket below</div>
-        </div>'''), unsafe_allow_html=True)
+        # Find next unplayed knockout match using time-based logic
+        import re as _rek
+        from datetime import timedelta as _tdk
+        _MMAP = {"Jan":1,"Feb":2,"Mar":3,"Apr":4,"May":5,"Jun":6,"Jul":7,"Aug":8,"Sep":9,"Oct":10,"Nov":11,"Dec":12}
+        _now_ko = datetime.now(timezone.utc)
+        _ko_rounds = ["R32","QF","SF","3PL","FIN"]
+        _ko_matches = [m for m in WC_SCHEDULE if m.get("group","") in _ko_rounds]
+        _next_ko = None; _next_ko_start = None; _live_ko = None
+        _ls_ko = {}
+        try: _ls_ko = fetch_live_scores()
+        except: pass
+        def _parse_ko_utc(m):
+            ts = _rek.search(r"(\d+):(\d+)\s*(AM|PM)", m.get("time",""))
+            if not ts: return None, None
+            hh=int(ts.group(1)); mm=int(ts.group(2)); ap=ts.group(3)
+            if ap=="PM" and hh!=12: hh+=12
+            if ap=="AM" and hh==12: hh=0
+            pts=m["date"].split(); s=datetime(2026,_MMAP[pts[0]],int(pts[1]),hh,mm,0,tzinfo=timezone.utc)+_tdk(hours=4)
+            return s, s+_tdk(hours=2)
+        for _km in sorted(_ko_matches, key=lambda m: _parse_ko_utc(m)[0] or datetime(2099,1,1,tzinfo=timezone.utc)):
+            _ks, _ke = _parse_ko_utc(_km)
+            if _ks is None: continue
+            _ks1,_ks2,_,_ = get_match_score(_km["team1"],_km["team2"],_ls_ko)
+            if _ks1 is not None: continue
+            if _ke < _now_ko - _tdk(minutes=30): continue
+            if _ks <= _now_ko <= _ke and _live_ko is None: _live_ko = _km
+            if _now_ko < _ks and (_next_ko is None or _ks < _next_ko_start): _next_ko=_km; _next_ko_start=_ks
+        _bko = _live_ko if _live_ko else _next_ko
+        if _bko:
+            _round_names = {"R32":"Round of 32","QF":"Quarter Final","SF":"Semi Final","3PL":"3rd Place","FIN":"⚽ World Cup Final"}
+            _rname = _round_names.get(_bko.get("group",""),"")
+            _fko1 = FLAGS.get(NATION_TO_CODE.get(_bko["team1"],""),"⚽")
+            _fko2 = FLAGS.get(NATION_TO_CODE.get(_bko["team2"],""),"⚽")
+            if _live_ko:
+                st.markdown(clean_html(f'''<div style="background:linear-gradient(135deg,rgba(40,5,5,0.97),rgba(20,2,2,0.99));border:1px solid rgba(239,68,68,0.4);border-radius:16px;padding:20px 32px;text-align:center;margin-bottom:16px;">
+                    <div style="font-size:0.65rem;color:#ef4444;text-transform:uppercase;letter-spacing:0.22em;font-weight:700;margin-bottom:8px;">🔴 Live Now · {_rname}</div>
+                    <div style="font-size:1.5rem;font-weight:900;color:#f0fdf4;">{_fko1} {_bko["team1"]} <span style="color:#4b2020;font-size:1rem;padding:0 10px;">vs</span> {_bko["team2"]} {_fko2}</div>
+                </div>'''), unsafe_allow_html=True)
+            else:
+                try:
+                    _tsko = _rek.search(r"(\d+):(\d+)\s*(AM|PM)", _bko.get("time",""))
+                    _h2=int(_tsko.group(1));_m2=int(_tsko.group(2));_a2=_tsko.group(3)
+                    if _a2=="PM" and _h2!=12: _h2+=12
+                    if _a2=="AM" and _h2==12: _h2=0
+                    _dp2=_bko["date"].split()
+                    _tms_ko=int((datetime(2026,_MMAP[_dp2[0]],int(_dp2[1]),_h2,_m2,0,tzinfo=timezone.utc)+_tdk(hours=4)).timestamp()*1000)
+                except: _tms_ko=0
+                _ko_html = (
+                    "<!DOCTYPE html><html><body style='margin:0;padding:0;background:#061a06;'>"
+                    f"<div style='background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;text-align:center;margin-bottom:0;'>"
+                    f"<div style='font-size:0.65rem;color:#4ade80;text-transform:uppercase;letter-spacing:0.22em;font-weight:700;margin-bottom:8px;'>Next Up · {_rname}</div>"
+                    f"<div style='font-size:1.5rem;font-weight:900;color:#f0fdf4;margin-bottom:6px;'>{_fko1} {_bko['team1']} <span style='color:#4b7c4b;font-size:1rem;padding:0 10px;'>vs</span> {_bko['team2']} {_fko2}</div>"
+                    f"<div style='font-size:0.75rem;color:#86efac;margin-bottom:10px;'>{_bko['date']} · {_bko['time']} · {_bko.get('city','')}</div>"
+                    "<div id='ko-cd' style='font-size:2rem;font-weight:900;color:#fbbf24;'>--</div>"
+                    "</div>"
+                    f"<script>var T={_tms_ko};"
+                    "function tick(){{var d=T-Date.now();var el=document.getElementById('ko-cd');if(!el)return;"
+                    "if(d<=0){{el.textContent='Starting!';return;}}"
+                    "var h=Math.floor(d/3600000),m=Math.floor((d%3600000)/60000),s=Math.floor((d%60000)/1000);"
+                    "el.textContent=(h>0?h+'h ':'')+( m<10?'0':'')+m+'m '+(s<10?'0':'')+s+'s';}}"
+                    "tick();setInterval(tick,1000);</script></body></html>"
+                )
+                _ko_b64 = base64.b64encode(_ko_html.encode('utf-8')).decode()
+                st.markdown(f'<iframe src="data:text/html;charset=utf-8;base64,{_ko_b64}" height="160" style="width:100%;border:none;background:transparent;"></iframe>', unsafe_allow_html=True)
+        else:
+            st.markdown(clean_html('''<div style="background:linear-gradient(135deg,rgba(8,28,8,0.97),rgba(3,10,3,0.99));border:1px solid rgba(74,222,128,0.2);border-radius:16px;padding:20px 32px;text-align:center;margin-bottom:16px;">
+                <div style="font-size:1.2rem;font-weight:800;color:#fbbf24;">🏆 Tournament Complete</div>
+            </div>'''), unsafe_allow_html=True)
         
     st.markdown("### 🗺️ Visual Bracket Tree")
     render_bracket_tree(ko_live)
