@@ -2,7 +2,6 @@ import streamlit as st
 import urllib.request
 import json as _json
 import streamlit.components.v1 as components
-import json as _json
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
